@@ -10,124 +10,126 @@
 class VulkanBlackboard
 {
 public:
-	VulkanBlackboard(const GPUInstanceDescriptor* pDesc)
-	{
-		const GPUVulkanInstanceDescriptor* vk_desc = (const GPUVulkanInstanceDescriptor*)pDesc->pChained;
+    VulkanBlackboard(const GPUInstanceDescriptor* pDesc)
+    {
+        const GPUVulkanInstanceDescriptor* vk_desc = (const GPUVulkanInstanceDescriptor*)pDesc->pChained;
 
-		//default
+        // default
         uint32_t count = sizeof(intanceWantedExtensions) / sizeof(const char*);
         mInstanceExtensions.insert(mInstanceExtensions.end(), intanceWantedExtensions, intanceWantedExtensions + count);
         count = sizeof(deviceWantedExtensions) / sizeof(const char*);
         mDeviceExtensions.insert(mDeviceExtensions.end(), deviceWantedExtensions, deviceWantedExtensions + count);
 
-
-		if (pDesc->enableDebugLayer)
-		{
-			mInstanceLayers.push_back(validationLayerName);
+        if (pDesc->enableDebugLayer)
+        {
+            mInstanceLayers.push_back(validationLayerName);
             mInstanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-		}
+        }
 
-		if (vk_desc != VK_NULL_HANDLE)
-		{
-			if (vk_desc->backend != EGPUBackend::GPUBackend_Vulkan)
-			{
+        if (vk_desc != VK_NULL_HANDLE)
+        {
+            if (vk_desc->backend != EGPUBackend::GPUBackend_Vulkan)
+            {
                 assert(0);
                 vk_desc = VK_NULL_HANDLE;
-			}
+            }
 
-			if (vk_desc->ppInstanceLayers != VK_NULL_HANDLE && vk_desc->mInstanceLayerCount > 0)
-			{
+            if (vk_desc->ppInstanceLayers != VK_NULL_HANDLE && vk_desc->mInstanceLayerCount > 0)
+            {
                 mInstanceLayers.insert(mInstanceExtensions.end(), vk_desc->ppInstanceLayers, vk_desc->ppInstanceLayers + vk_desc->mInstanceLayerCount);
-			}
+            }
 
-			if (vk_desc->ppInstanceExtensions != VK_NULL_HANDLE && vk_desc->mInstanceExtensionCount > 0)
+            if (vk_desc->ppInstanceExtensions != VK_NULL_HANDLE && vk_desc->mInstanceExtensionCount > 0)
             {
                 mInstanceExtensions.insert(mInstanceExtensions.end(), vk_desc->ppInstanceExtensions, vk_desc->ppInstanceExtensions + vk_desc->mInstanceExtensionCount);
             }
-		}
-	}
+        }
+    }
 
-	const VkDebugUtilsMessengerCreateInfoEXT* pDeubgUtilsMessengerCreateInfo = VK_NULL_HANDLE;
-	std::vector<const char*> mInstanceLayers;
-	std::vector<const char*> mInstanceExtensions;
-	std::vector<const char*> mDeviceExtensions;
+    const VkDebugUtilsMessengerCreateInfoEXT* pDeubgUtilsMessengerCreateInfo = VK_NULL_HANDLE;
+    std::vector<const char*> mInstanceLayers;
+    std::vector<const char*> mInstanceExtensions;
+    std::vector<const char*> mDeviceExtensions;
 };
 
-const GPUProcTable vkTable =
-{
-	.CreateInstance = &CreateInstance_Vulkan,
-	.FreeInstance = &FreeInstance_Vllkan,
-    .EnumerateAdapters = &EnumerateAdapters_Vulkan,
-    .CreateDevice = &CreateDevice_Vulkan,
-    .FreeDevice = &FreeDevice_Vulkan,
-    .GetQueue = &GetQueue_Vulkan,
-    .CreateSwapchain = &GPUCreateSwapchain_Vulkan,
-    .FreeSwapchain = &GPUFreeSwapchain_Vulkan
+const GPUProcTable vkTable = {
+    .CreateInstance      = &CreateInstance_Vulkan,
+    .FreeInstance        = &FreeInstance_Vllkan,
+    .EnumerateAdapters   = &EnumerateAdapters_Vulkan,
+    .CreateDevice        = &CreateDevice_Vulkan,
+    .FreeDevice          = &FreeDevice_Vulkan,
+    .GetQueue            = &GetQueue_Vulkan,
+    .CreateSwapchain     = &GPUCreateSwapchain_Vulkan,
+    .FreeSwapchain       = &GPUFreeSwapchain_Vulkan,
+    .CreateTextureView   = &GPUCreateTextureView_Vulkan,
+    .FreeTextureView     = &GPUFreeTextureView_Vulkan,
+    .CreateShaderLibrary = &GPUCreateShaderLibrary_Vulkan,
+    .FreeShaderLibrary   = &GPUFreeShaderLibrary_Vulkan
 };
 const GPUProcTable* GPUVulkanProcTable()
 {
-	return &vkTable;
+    return &vkTable;
 }
 
 GPUInstanceID CreateInstance_Vulkan(const GPUInstanceDescriptor* pDesc)
 {
-	VulkanBlackboard blackBoard(pDesc);
+    VulkanBlackboard blackBoard(pDesc);
 
-	GPUInstance_Vulkan* I = (GPUInstance_Vulkan*)malloc(sizeof(GPUInstance_Vulkan));
-	::memset(I, 0, sizeof(GPUInstance_Vulkan));
+    GPUInstance_Vulkan* I = (GPUInstance_Vulkan*)malloc(sizeof(GPUInstance_Vulkan));
+    ::memset(I, 0, sizeof(GPUInstance_Vulkan));
 
-	VkResult result = volkInitialize();
-	if (result != VK_SUCCESS)
-	{
-		assert(0);
-	}
+    VkResult result = volkInitialize();
+    if (result != VK_SUCCESS)
+    {
+        assert(0);
+    }
 
-	VkApplicationInfo appInfo{};
-    appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    appInfo.pApplicationName = "GPU";
-    appInfo.apiVersion = VK_API_VERSION_1_1;
+    VkApplicationInfo appInfo{};
+    appInfo.sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+    appInfo.pApplicationName   = "GPU";
+    appInfo.apiVersion         = VK_API_VERSION_1_1;
     appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-    appInfo.pEngineName = "No Engine";
-    appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+    appInfo.pEngineName        = "No Engine";
+    appInfo.engineVersion      = VK_MAKE_VERSION(1, 0, 0);
 
-	VulkanUtil_SelectValidationLayers(I, blackBoard.mInstanceLayers.data(), (uint32_t)blackBoard.mInstanceLayers.size());
+    VulkanUtil_SelectValidationLayers(I, blackBoard.mInstanceLayers.data(), (uint32_t)blackBoard.mInstanceLayers.size());
     VulkanUtil_SelectInstanceExtensions(I, blackBoard.mInstanceExtensions.data(), (uint32_t)blackBoard.mInstanceExtensions.size());
 
-	VkInstanceCreateInfo createInfo{};
-    createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-    createInfo.pApplicationInfo = &appInfo;
-    createInfo.enabledLayerCount = (uint32_t)blackBoard.mInstanceLayers.size();
-    createInfo.ppEnabledLayerNames = blackBoard.mInstanceLayers.data();
-    createInfo.enabledExtensionCount = (uint32_t)blackBoard.mInstanceExtensions.size();
+    VkInstanceCreateInfo createInfo{};
+    createInfo.sType                   = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    createInfo.pApplicationInfo        = &appInfo;
+    createInfo.enabledLayerCount       = (uint32_t)blackBoard.mInstanceLayers.size();
+    createInfo.ppEnabledLayerNames     = blackBoard.mInstanceLayers.data();
+    createInfo.enabledExtensionCount   = (uint32_t)blackBoard.mInstanceExtensions.size();
     createInfo.ppEnabledExtensionNames = blackBoard.mInstanceExtensions.data();
 
-	if (pDesc->enableValidation)
-	{
-		if (!pDesc->enableDebugLayer)
-		{
+    if (pDesc->enableValidation)
+    {
+        if (!pDesc->enableDebugLayer)
+        {
             assert(0);
-		}
+        }
 
-		VkValidationFeaturesEXT validationFeatureExt {};
-        validationFeatureExt.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
+        VkValidationFeaturesEXT validationFeatureExt{};
+        validationFeatureExt.sType                    = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
         VkValidationFeatureEnableEXT enableFeatures[] = {
             VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
             VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT
         };
-        validationFeatureExt.pEnabledValidationFeatures = enableFeatures;
+        validationFeatureExt.pEnabledValidationFeatures    = enableFeatures;
         validationFeatureExt.enabledValidationFeatureCount = (uint32_t)(sizeof(enableFeatures) / sizeof(VkValidationFeatureEnableEXT));
-        createInfo.pNext = &validationFeatureExt;
-	}
+        createInfo.pNext                                   = &validationFeatureExt;
+    }
 
-	result = vkCreateInstance(&createInfo, GLOBAL_VkAllocationCallbacks, &I->pInstance);
-	if (result != VK_SUCCESS)
-	{
-		assert(0);
-	}
+    result = vkCreateInstance(&createInfo, GLOBAL_VkAllocationCallbacks, &I->pInstance);
+    if (result != VK_SUCCESS)
+    {
+        assert(0);
+    }
 
-	volkLoadInstance(I->pInstance);
+    volkLoadInstance(I->pInstance);
 
-	//Adapters
+    // Adapters
     VulkanUtil_QueryAllAdapters(I, blackBoard.mDeviceExtensions.data(), (uint32_t)blackBoard.mDeviceExtensions.size());
     std::sort(I->pAdapters, I->pAdapters + I->adapterCount, [](const GPUAdapter_Vulkan& a, const GPUAdapter_Vulkan& b) {
         const uint32_t orders[] = {
@@ -136,40 +138,40 @@ GPUInstanceID CreateInstance_Vulkan(const GPUInstanceDescriptor* pDesc)
         return orders[a.physicalDeviceProperties.properties.deviceType] < orders[b.physicalDeviceProperties.properties.deviceType];
     });
 
-	if (pDesc->enableDebugLayer)
-	{
-        I->debugUtils = 1; //TODO:
+    if (pDesc->enableDebugLayer)
+    {
+        I->debugUtils = 1; // TODO:
         VulkanUtil_EnableValidationLayers(I, blackBoard.pDeubgUtilsMessengerCreateInfo);
-	}
+    }
 
-	return &(I->super);
+    return &(I->super);
 }
 
 void FreeInstance_Vllkan(GPUInstanceID pInstance)
 {
-	GPUInstance_Vulkan* p = (GPUInstance_Vulkan*)pInstance;
+    GPUInstance_Vulkan* p = (GPUInstance_Vulkan*)pInstance;
 
-	if (p->pDebugUtils)
-	{
+    if (p->pDebugUtils)
+    {
         assert(vkDestroyDebugUtilsMessengerEXT && "load vkDestroyDebugUtilsMessengerEXT failed!");
         vkDestroyDebugUtilsMessengerEXT(p->pInstance, p->pDebugUtils, GLOBAL_VkAllocationCallbacks);
-	}
+    }
 
-	vkDestroyInstance(p->pInstance, GLOBAL_VkAllocationCallbacks);
+    vkDestroyInstance(p->pInstance, GLOBAL_VkAllocationCallbacks);
 
-	GPU_SAFE_FREE(p->pLayerProperties);
+    GPU_SAFE_FREE(p->pLayerProperties);
     GPU_SAFE_FREE(p->pLayerNames);
 
     GPU_SAFE_FREE(p->pExtensonProperties);
     GPU_SAFE_FREE(p->pExtensionNames);
 
-	GPU_SAFE_FREE(p);
+    GPU_SAFE_FREE(p);
 }
 
 void EnumerateAdapters_Vulkan(GPUInstanceID pInstance, GPUAdapterID* const ppAdapters, uint32_t* adapterCount)
 {
     const GPUInstance_Vulkan* pVkInstance = (const GPUInstance_Vulkan*)pInstance;
-    *adapterCount = pVkInstance->adapterCount;
+    *adapterCount                         = pVkInstance->adapterCount;
     if (ppAdapters != VK_NULL_HANDLE)
     {
         for (uint32_t i = 0; i < *adapterCount; i++)
@@ -183,10 +185,14 @@ VkFormat GPUFormatToVulkanFormat(EGPUFormat format)
 {
     switch (format)
     {
-        case EGPUFormat::GPU_FORMAT_B8G8R8A8_UNORM: return VK_FORMAT_B8G8R8A8_UNORM;
-        case EGPUFormat::GPU_FORMAT_B8G8R8A8_SRGB: return VK_FORMAT_B8G8R8A8_SRGB;
-        case EGPUFormat::GPU_FORMAT_R8G8BA8_UNORM: return VK_FORMAT_R8G8B8A8_UNORM;
-        case EGPUFormat::GPU_FORMAT_R8G8B8A8_SRGB: return VK_FORMAT_R8G8B8A8_SRGB;
+        case EGPUFormat::GPU_FORMAT_B8G8R8A8_UNORM:
+            return VK_FORMAT_B8G8R8A8_UNORM;
+        case EGPUFormat::GPU_FORMAT_B8G8R8A8_SRGB:
+            return VK_FORMAT_B8G8R8A8_SRGB;
+        case EGPUFormat::GPU_FORMAT_R8G8BA8_UNORM:
+            return VK_FORMAT_R8G8B8A8_UNORM;
+        case EGPUFormat::GPU_FORMAT_R8G8B8A8_SRGB:
+            return VK_FORMAT_R8G8B8A8_SRGB;
     }
     return VK_FORMAT_UNDEFINED;
 }
@@ -216,32 +222,32 @@ const float queuePriorities[] = {
 GPUDeviceID CreateDevice_Vulkan(GPUAdapterID pAdapter, const GPUDeviceDescriptor* pDesc)
 {
     GPUInstance_Vulkan* pVkInstance = (GPUInstance_Vulkan*)pAdapter->pInstance;
-    GPUDevice_Vulkan* pDevice = (GPUDevice_Vulkan*)malloc(sizeof(GPUDevice_Vulkan));
-    GPUAdapter_Vulkan* pVkAdapter = (GPUAdapter_Vulkan*)pAdapter;
+    GPUDevice_Vulkan* pDevice       = (GPUDevice_Vulkan*)malloc(sizeof(GPUDevice_Vulkan));
+    GPUAdapter_Vulkan* pVkAdapter   = (GPUAdapter_Vulkan*)pAdapter;
 
     *const_cast<GPUAdapterID*>(&pDevice->spuer.pAdapter) = pAdapter;
 
-	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos(pDesc->queueGroupCount);
-	for (uint32_t i = 0; i < pDesc->queueGroupCount; i++)
-	{
+    std::vector<VkDeviceQueueCreateInfo> queueCreateInfos(pDesc->queueGroupCount);
+    for (uint32_t i = 0; i < pDesc->queueGroupCount; i++)
+    {
         GPUQueueGroupDescriptor& descriptor = pDesc->pQueueGroup[i];
-        VkDeviceQueueCreateInfo& info = queueCreateInfos[i];
-        info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        info.queueCount = descriptor.queueCount;
-        info.queueFamilyIndex = (uint32_t)pVkAdapter->queueFamilyIndices[descriptor.queueType];
-        info.pQueuePriorities = queuePriorities;
+        VkDeviceQueueCreateInfo& info       = queueCreateInfos[i];
+        info.sType                          = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        info.queueCount                     = descriptor.queueCount;
+        info.queueFamilyIndex               = (uint32_t)pVkAdapter->queueFamilyIndices[descriptor.queueType];
+        info.pQueuePriorities               = queuePriorities;
 
         assert(QueryQueueCount_Vulkan(pAdapter, descriptor.queueType) >= descriptor.queueCount);
-	}
+    }
 
-    VkDeviceCreateInfo createInfo {};
-    createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    createInfo.pNext = &pVkAdapter->physicalDeviceFeatures;
+    VkDeviceCreateInfo createInfo{};
+    createInfo.sType                = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    createInfo.pNext                = &pVkAdapter->physicalDeviceFeatures;
     createInfo.queueCreateInfoCount = pDesc->queueGroupCount;
-    createInfo.pQueueCreateInfos = queueCreateInfos.data();
-    createInfo.pEnabledFeatures = VK_NULL_HANDLE;
-    //layer & extension
-    createInfo.enabledExtensionCount = pVkAdapter->extensionsCount;
+    createInfo.pQueueCreateInfos    = queueCreateInfos.data();
+    createInfo.pEnabledFeatures     = VK_NULL_HANDLE;
+    // layer & extension
+    createInfo.enabledExtensionCount   = pVkAdapter->extensionsCount;
     createInfo.ppEnabledExtensionNames = pVkAdapter->ppExtensionsName;
 
     VkResult result = vkCreateDevice(pVkAdapter->pPhysicalDevice, &createInfo, GLOBAL_VkAllocationCallbacks, &pDevice->pDevice);
@@ -253,7 +259,7 @@ GPUDeviceID CreateDevice_Vulkan(GPUAdapterID pAdapter, const GPUDeviceDescriptor
     volkLoadDeviceTable(&pDevice->mVkDeviceTable, pDevice->pDevice);
     assert(pDevice->mVkDeviceTable.vkCreateSwapchainKHR);
 
-    //pipeline cache
+    // pipeline cache
 
     return &(pDevice->spuer);
 }
@@ -268,23 +274,21 @@ void FreeDevice_Vulkan(GPUDeviceID pDevice)
 uint32_t QueryQueueCount_Vulkan(const GPUAdapterID pAdapter, const EGPUQueueType queueType)
 {
     const GPUAdapter_Vulkan* ptr = (const GPUAdapter_Vulkan*)pAdapter;
-    uint32_t count = 0;
+    uint32_t count               = 0;
     switch (queueType)
     {
-        case EGPUQueueType::GPU_QUEUE_TYPE_GRAPHICS:
-		{
-			for (uint32_t i = 0; i < ptr->queueFamiliesCount; i++)
-			{
+        case EGPUQueueType::GPU_QUEUE_TYPE_GRAPHICS: {
+            for (uint32_t i = 0; i < ptr->queueFamiliesCount; i++)
+            {
                 VkQueueFamilyProperties& props = ptr->pQueueFamilyProperties[i];
-				if (props.queueFlags & VK_QUEUE_GRAPHICS_BIT)
-				{
+                if (props.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+                {
                     count += props.queueCount;
-				}
-			}
-		}
+                }
+            }
+        }
         break;
-        case EGPUQueueType::GPU_QUEUE_TYPE_COMPUTE:
-		{
+        case EGPUQueueType::GPU_QUEUE_TYPE_COMPUTE: {
             for (uint32_t i = 0; i < ptr->queueFamiliesCount; i++)
             {
                 VkQueueFamilyProperties& props = ptr->pQueueFamilyProperties[i];
@@ -296,10 +300,9 @@ uint32_t QueryQueueCount_Vulkan(const GPUAdapterID pAdapter, const EGPUQueueType
                     }
                 }
             }
-		}
+        }
         break;
-        case EGPUQueueType::GPU_QUEUE_TYPE_TRANSFER:
-        {
+        case EGPUQueueType::GPU_QUEUE_TYPE_TRANSFER: {
             for (uint32_t i = 0; i < ptr->queueFamiliesCount; i++)
             {
                 VkQueueFamilyProperties& props = ptr->pQueueFamilyProperties[i];
@@ -325,12 +328,12 @@ uint32_t QueryQueueCount_Vulkan(const GPUAdapterID pAdapter, const EGPUQueueType
 GPUQueueID GetQueue_Vulkan(GPUDeviceID pDevice, EGPUQueueType queueType, uint32_t queueIndex)
 {
     GPUAdapter_Vulkan* pVkAdapter = (GPUAdapter_Vulkan*)pDevice->pAdapter;
-    GPUDevice_Vulkan* pVkDevice = (GPUDevice_Vulkan*)pDevice;
-    GPUQueue_Vulkan* pVkQueue = (GPUQueue_Vulkan*)malloc(sizeof(GPUQueue_Vulkan));
-    GPUQueue tmpQueue = {
-        .pDevice = pDevice,
-        .queueType = queueType,
-        .queueIndex = queueIndex
+    GPUDevice_Vulkan* pVkDevice   = (GPUDevice_Vulkan*)pDevice;
+    GPUQueue_Vulkan* pVkQueue     = (GPUQueue_Vulkan*)malloc(sizeof(GPUQueue_Vulkan));
+    GPUQueue tmpQueue             = {
+                    .pDevice    = pDevice,
+                    .queueType  = queueType,
+                    .queueIndex = queueIndex
     };
     *(GPUQueue*)&pVkQueue->super = tmpQueue;
 
@@ -343,15 +346,15 @@ GPUQueueID GetQueue_Vulkan(GPUDeviceID pDevice, EGPUQueueType queueType, uint32_
 GPUSwapchainID GPUCreateSwapchain_Vulkan(GPUDeviceID pDevice, GPUSwapchainDescriptor* pDesc)
 {
     GPUAdapter_Vulkan* pVkAdapter = (GPUAdapter_Vulkan*)pDevice->pAdapter;
-    GPUQueue_Vulkan* pVkQueue = (GPUQueue_Vulkan*)pDesc->ppPresentQueues[0];
-    GPUDevice_Vulkan* pVkDevice = (GPUDevice_Vulkan*)pDevice;
+    GPUQueue_Vulkan* pVkQueue     = (GPUQueue_Vulkan*)pDesc->ppPresentQueues[0];
+    GPUDevice_Vulkan* pVkDevice   = (GPUDevice_Vulkan*)pDevice;
 
     VkSurfaceKHR pVkSurface = (VkSurfaceKHR)pDesc->pSurface;
 
-    VkSurfaceCapabilitiesKHR capabilities; 
+    VkSurfaceCapabilitiesKHR capabilities;
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(pVkAdapter->pPhysicalDevice, pVkSurface, &capabilities);
 
-    //format
+    // format
     uint32_t formatCount = 0;
     vkGetPhysicalDeviceSurfaceFormatsKHR(pVkAdapter->pPhysicalDevice, pVkSurface, &formatCount, VK_NULL_HANDLE);
     DECLEAR_ZERO_VAL(VkSurfaceFormatKHR, surfaceFormats, formatCount);
@@ -366,22 +369,22 @@ GPUSwapchainID GPUCreateSwapchain_Vulkan(GPUDeviceID pDevice, GPUSwapchainDescri
     }
     else
     {
-        VkFormat requestFormat = GPUFormatToVulkanFormat(pDesc->format);
+        VkFormat requestFormat            = GPUFormatToVulkanFormat(pDesc->format);
         VkColorSpaceKHR requestColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
         for (uint32_t i = 0; i < formatCount; i++)
         {
             if (requestFormat == surfaceFormats[i].format && requestColorSpace == surfaceFormats[i].colorSpace)
             {
-                surfaceFormat.format = requestFormat;
+                surfaceFormat.format     = requestFormat;
                 surfaceFormat.colorSpace = requestColorSpace;
                 break;
             }
         }
     }
 
-    //present mode
+    // present mode
     VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;
-    uint32_t presentModeCount = 0;
+    uint32_t presentModeCount    = 0;
     vkGetPhysicalDeviceSurfacePresentModesKHR(pVkAdapter->pPhysicalDevice, pVkSurface, &presentModeCount, VK_NULL_HANDLE);
     DECLEAR_ZERO_VAL(VkPresentModeKHR, presentModes, presentModeCount);
     vkGetPhysicalDeviceSurfacePresentModesKHR(pVkAdapter->pPhysicalDevice, pVkSurface, &presentModeCount, presentModes);
@@ -393,11 +396,11 @@ GPUSwapchainID GPUCreateSwapchain_Vulkan(GPUDeviceID pDevice, GPUSwapchainDescri
         VK_PRESENT_MODE_FIFO_KHR          // low power consumption
     };
     const uint32_t preferredModeCount = sizeof(preferredModeList) / sizeof(VkPresentModeKHR);
-    uint32_t preferredModeStartIndex = pDesc->enableVSync ? 1 : 0;
+    uint32_t preferredModeStartIndex  = pDesc->enableVSync ? 1 : 0;
     for (uint32_t j = preferredModeStartIndex; j < preferredModeCount; ++j)
     {
         VkPresentModeKHR mode = preferredModeList[j];
-        uint32_t i = 0;
+        uint32_t i            = 0;
         for (i = 0; i < presentModeCount; ++i)
         {
             if (presentModes[i] == mode) break;
@@ -415,12 +418,12 @@ GPUSwapchainID GPUCreateSwapchain_Vulkan(GPUDeviceID pDevice, GPUSwapchainDescri
         return num;
     };
     VkExtent2D extent;
-    extent.width = clamp(pDesc->width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
+    extent.width  = clamp(pDesc->width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
     extent.height = clamp(pDesc->height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
 
     uint32_t presentQueueFamilyIndex = -1;
-    VkBool32 presentSupport = false;
-    VkResult res = vkGetPhysicalDeviceSurfaceSupportKHR(pVkAdapter->pPhysicalDevice, pVkQueue->queueFamilyIndex, pVkSurface, &presentSupport);
+    VkBool32 presentSupport          = false;
+    VkResult res                     = vkGetPhysicalDeviceSurfaceSupportKHR(pVkAdapter->pPhysicalDevice, pVkQueue->queueFamilyIndex, pVkSurface, &presentSupport);
     if (res == VK_SUCCESS && presentSupport)
     {
         presentQueueFamilyIndex = pVkQueue->queueFamilyIndex;
@@ -437,7 +440,7 @@ GPUSwapchainID GPUCreateSwapchain_Vulkan(GPUDeviceID pDevice, GPUSwapchainDescri
             for (uint32_t index = 0; index < queueFamilyPropertyCount; ++index)
             {
                 VkBool32 supportPresent = VK_FALSE;
-                VkResult res = vkGetPhysicalDeviceSurfaceSupportKHR(pVkAdapter->pPhysicalDevice, index, pVkSurface, &supportPresent);
+                VkResult res            = vkGetPhysicalDeviceSurfaceSupportKHR(pVkAdapter->pPhysicalDevice, index, pVkSurface, &supportPresent);
                 if ((VK_SUCCESS == res) && (VK_TRUE == supportPresent) && pVkQueue->queueFamilyIndex != index)
                 {
                     presentQueueFamilyIndex = index;
@@ -451,7 +454,7 @@ GPUSwapchainID GPUCreateSwapchain_Vulkan(GPUDeviceID pDevice, GPUSwapchainDescri
                 for (uint32_t index = 0; index < queueFamilyPropertyCount; ++index)
                 {
                     VkBool32 supportPresent = VK_FALSE;
-                    VkResult res = vkGetPhysicalDeviceSurfaceSupportKHR(pVkAdapter->pPhysicalDevice, index, pVkSurface, &supportPresent);
+                    VkResult res            = vkGetPhysicalDeviceSurfaceSupportKHR(pVkAdapter->pPhysicalDevice, index, pVkSurface, &supportPresent);
                     if ((VK_SUCCESS == res) && (VK_TRUE == supportPresent))
                     {
                         presentQueueFamilyIndex = index;
@@ -485,7 +488,7 @@ GPUSwapchainID GPUCreateSwapchain_Vulkan(GPUDeviceID pDevice, GPUSwapchainDescri
         VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR,
     };
     VkCompositeAlphaFlagBitsKHR compositeAlpha = VK_COMPOSITE_ALPHA_FLAG_BITS_MAX_ENUM_KHR;
-    uint32_t compositeAlphaFlagsCount = sizeof(compositeAlphaFlags) / sizeof(VkCompositeAlphaFlagBitsKHR);
+    uint32_t compositeAlphaFlagsCount          = sizeof(compositeAlphaFlags) / sizeof(VkCompositeAlphaFlagBitsKHR);
     for (uint32_t i = 0; i < compositeAlphaFlagsCount; i++)
     {
         if (capabilities.supportedCompositeAlpha & compositeAlphaFlags[i])
@@ -496,22 +499,22 @@ GPUSwapchainID GPUCreateSwapchain_Vulkan(GPUDeviceID pDevice, GPUSwapchainDescri
     }
     assert(compositeAlpha != VK_COMPOSITE_ALPHA_FLAG_BITS_MAX_ENUM_KHR);
 
-    VkSwapchainCreateInfoKHR createInfo = {};
-    createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    createInfo.surface = pVkSurface;
-    createInfo.minImageCount = pDesc->imageCount;
-    createInfo.imageFormat = surfaceFormat.format;
-    createInfo.imageColorSpace = surfaceFormat.colorSpace;
-    createInfo.imageExtent = extent;
-    createInfo.imageArrayLayers = 1;
-    createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-    createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    VkSwapchainCreateInfoKHR createInfo{};
+    createInfo.sType                 = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    createInfo.surface               = pVkSurface;
+    createInfo.minImageCount         = pDesc->imageCount;
+    createInfo.imageFormat           = surfaceFormat.format;
+    createInfo.imageColorSpace       = surfaceFormat.colorSpace;
+    createInfo.imageExtent           = extent;
+    createInfo.imageArrayLayers      = 1;
+    createInfo.imageUsage            = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    createInfo.imageSharingMode      = VK_SHARING_MODE_EXCLUSIVE;
     createInfo.queueFamilyIndexCount = 1;
-    createInfo.pQueueFamilyIndices = &presentQueueFamilyIndex;
-    createInfo.preTransform = preTransform;
-    createInfo.compositeAlpha = compositeAlpha;
-    createInfo.presentMode = presentMode;
-    createInfo.clipped = VK_TRUE;
+    createInfo.pQueueFamilyIndices   = &presentQueueFamilyIndex;
+    createInfo.preTransform          = preTransform;
+    createInfo.compositeAlpha        = compositeAlpha;
+    createInfo.presentMode           = presentMode;
+    createInfo.clipped               = VK_TRUE;
 
     VkSwapchainKHR pVkSwapchain;
     VkResult result = pVkDevice->mVkDeviceTable.vkCreateSwapchainKHR(pVkDevice->pDevice, &createInfo, GLOBAL_VkAllocationCallbacks, &pVkSwapchain);
@@ -526,20 +529,20 @@ GPUSwapchainID GPUCreateSwapchain_Vulkan(GPUDeviceID pDevice, GPUSwapchainDescri
         GPUSwapchain_Vulkan
         {
             GPUSwapchain
-	        {
+            {
                 GPUDeviceID pDevice;
                 const GPUTextureID* ppBackBuffers;
                 uint32_t backBuffersCount;
-	        };
+            };
             VkSurfaceKHR pVkSurface;
             VkSwapchainKHR pVkSwapchain;
         };
     */
     // mem:GPUSwapchain_Vulkan + mem:(swapchain image) + mem:(GPUSwapchain.ppBackBuffers)
-    uint32_t size = sizeof(GPUSwapchain_Vulkan) + imageCount * sizeof(GPUTexture_Vulkan) + imageCount * sizeof(GPUTextureID*);
-    GPUSwapchain_Vulkan* pSwapchain = (GPUSwapchain_Vulkan*)malloc(sizeof(GPUSwapchain_Vulkan));
-    pSwapchain->pVkSwapchain = pVkSwapchain;
-    pSwapchain->pVkSurface = pVkSurface;
+    uint32_t size                      = sizeof(GPUSwapchain_Vulkan) + imageCount * sizeof(GPUTexture_Vulkan) + imageCount * sizeof(GPUTextureID*);
+    GPUSwapchain_Vulkan* pSwapchain    = (GPUSwapchain_Vulkan*)malloc(size);
+    pSwapchain->pVkSwapchain           = pVkSwapchain;
+    pSwapchain->pVkSurface             = pVkSurface;
     pSwapchain->super.backBuffersCount = imageCount;
     DECLEAR_ZERO_VAL(VkImage, images, imageCount);
     pVkDevice->mVkDeviceTable.vkGetSwapchainImagesKHR(pVkDevice->pDevice, pVkSwapchain, &imageCount, images);
@@ -547,19 +550,19 @@ GPUSwapchainID GPUCreateSwapchain_Vulkan(GPUDeviceID pDevice, GPUSwapchainDescri
     GPUTexture_Vulkan* pTex = (GPUTexture_Vulkan*)(pSwapchain + 1);
     for (uint32_t i = 0; i < imageCount; i++)
     {
-        pTex[i].pVkImage = images[i];
-        pTex[i].super.isCube = false;
+        pTex[i].pVkImage                = images[i];
+        pTex[i].super.isCube            = false;
         pTex[i].super.arraySizeMinusOne = 0;
-        pTex[i].super.pDevice = &pVkDevice->spuer;
-        pTex[i].super.sampleCount = GPU_SAMPLE_COUNT_1; // TODO: ?
-        pTex[i].super.format = GPUVulkanFormatToGPUFormat(surfaceFormat.format);
-        //pTex[i].super.aspectMask = VkUtil_DeterminAspectMask(Ts[i].super.format, false);
-        pTex[i].super.depth = 1;
-        pTex[i].super.width = extent.width;
-        pTex[i].super.height = extent.height;
+        pTex[i].super.pDevice           = &pVkDevice->spuer;
+        pTex[i].super.sampleCount       = GPU_SAMPLE_COUNT_1; // TODO: ?
+        pTex[i].super.format            = GPUVulkanFormatToGPUFormat(surfaceFormat.format);
+        // pTex[i].super.aspectMask = VkUtil_DeterminAspectMask(Ts[i].super.format, false);
+        pTex[i].super.depth     = 1;
+        pTex[i].super.width     = extent.width;
+        pTex[i].super.height    = extent.height;
         pTex[i].super.mipLevels = 1;
-        //pTex[i].super.node_index = CGPU_SINGLE_GPU_NODE_INDEX;
-        pTex[i].super.ownsImage = false;
+        // pTex[i].super.node_index = CGPU_SINGLE_GPU_NODE_INDEX;
+        pTex[i].super.ownsImage    = false;
         pTex[i].super.nativeHandle = pTex[i].pVkImage;
     }
 
@@ -575,9 +578,160 @@ GPUSwapchainID GPUCreateSwapchain_Vulkan(GPUDeviceID pDevice, GPUSwapchainDescri
 
 void GPUFreeSwapchain_Vulkan(GPUSwapchainID pSwapchain)
 {
-    GPUSwapchain_Vulkan* p = (GPUSwapchain_Vulkan*)pSwapchain;
+    GPUSwapchain_Vulkan* p    = (GPUSwapchain_Vulkan*)pSwapchain;
     GPUDevice_Vulkan* pDevice = (GPUDevice_Vulkan*)p->super.pDevice;
     pDevice->mVkDeviceTable.vkDestroySwapchainKHR(pDevice->pDevice, p->pVkSwapchain, GLOBAL_VkAllocationCallbacks);
-    //GPU_SAFE_FREE(p);
-    free(p);
+    GPU_SAFE_FREE(p);
 }
+
+GPUTextureViewID GPUCreateTextureView_Vulkan(GPUDeviceID pDevice, const GPUTextureViewDescriptor* pDesc)
+{
+    GPUDevice_Vulkan* pVkDevice           = (GPUDevice_Vulkan*)pDevice;
+    GPUTextureView_Vulkan* pVkTextureView = (GPUTextureView_Vulkan*)_aligned_malloc(sizeof(GPUTextureView_Vulkan), alignof(GPUTextureView_Vulkan));
+
+    GPUTexture_Vulkan* pVkTexture = (GPUTexture_Vulkan*)pDesc->pTexture;
+
+    VkImageViewType viewType = VK_IMAGE_VIEW_TYPE_MAX_ENUM;
+    VkImageType imageType    = pDesc->pTexture->isCube ? VK_IMAGE_TYPE_3D : VK_IMAGE_TYPE_2D;
+    switch (imageType)
+    {
+        case VK_IMAGE_TYPE_1D:
+            viewType = pDesc->arrayLayerCount > 1 ? VK_IMAGE_VIEW_TYPE_1D_ARRAY : VK_IMAGE_VIEW_TYPE_1D;
+            break;
+        case VK_IMAGE_TYPE_2D:
+            viewType = VK_IMAGE_VIEW_TYPE_2D;
+            break;
+        case VK_IMAGE_TYPE_3D: {
+            if (pDesc->arrayLayerCount > 1)
+            {
+                assert(0);
+            }
+            viewType = VK_IMAGE_VIEW_TYPE_3D;
+        }
+        break;
+        default:
+            assert(0);
+            break;
+    }
+    assert(viewType != VK_IMAGE_VIEW_TYPE_MAX_ENUM);
+
+    VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_NONE;
+    if (pDesc->aspectMask & EGPUTextureViewAspect::GPU_TVA_COLOR)
+    {
+        aspectMask |= VK_IMAGE_ASPECT_COLOR_BIT;
+    }
+    if (pDesc->aspectMask & EGPUTextureViewAspect::GPU_TVA_DEPTH)
+    {
+        aspectMask |= VK_IMAGE_ASPECT_DEPTH_BIT;
+    }
+    if (pDesc->aspectMask & EGPUTextureViewAspect::GPU_TVA_STENCIL)
+    {
+        aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+    }
+
+    VkImageViewCreateInfo createInfo{};
+    createInfo.sType                           = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    createInfo.image                           = pVkTexture->pVkImage;
+    createInfo.viewType                        = viewType;
+    createInfo.format                          = GPUFormatToVulkanFormat(pDesc->format);
+    createInfo.components.r                    = VK_COMPONENT_SWIZZLE_R;
+    createInfo.components.g                    = VK_COMPONENT_SWIZZLE_G;
+    createInfo.components.b                    = VK_COMPONENT_SWIZZLE_B;
+    createInfo.components.a                    = VK_COMPONENT_SWIZZLE_A;
+    createInfo.subresourceRange.aspectMask     = aspectMask;
+    createInfo.subresourceRange.baseMipLevel   = pDesc->baseMipLevel;
+    createInfo.subresourceRange.levelCount     = pDesc->mipLevelCount;
+    createInfo.subresourceRange.baseArrayLayer = pDesc->baseArrayLayer;
+    createInfo.subresourceRange.layerCount     = pDesc->arrayLayerCount;
+
+    pVkTextureView->pVkSRVDescriptor = VK_NULL_HANDLE;
+    if (pDesc->usage & EGPUTexutreViewUsage::GPU_TVU_SRV)
+    {
+        if (pVkDevice->mVkDeviceTable.vkCreateImageView(pVkDevice->pDevice,
+                                                        &createInfo,
+                                                        GLOBAL_VkAllocationCallbacks,
+                                                        &pVkTextureView->pVkSRVDescriptor) != VK_SUCCESS)
+        {
+            assert(0);
+        }
+    }
+    pVkTextureView->pVkUAVDescriptor = VK_NULL_HANDLE;
+    if (pDesc->usage & EGPUTexutreViewUsage::GPU_TVU_UAV)
+    {
+        VkImageViewCreateInfo tmp = createInfo;
+        // #NOTE : We dont support imageCube, imageCubeArray for consistency with other APIs
+        // All cubemaps will be used as image2DArray for Image Load / Store ops
+        if (tmp.viewType == VK_IMAGE_VIEW_TYPE_CUBE_ARRAY || tmp.viewType == VK_IMAGE_VIEW_TYPE_CUBE)
+        {
+            tmp.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+        }
+        tmp.subresourceRange.baseMipLevel = pDesc->baseMipLevel;
+        if (pVkDevice->mVkDeviceTable.vkCreateImageView(pVkDevice->pDevice,
+                                                        &tmp,
+                                                        GLOBAL_VkAllocationCallbacks,
+                                                        &pVkTextureView->pVkUAVDescriptor) != VK_SUCCESS)
+        {
+            assert(0);
+        }
+    }
+    pVkTextureView->pVkRTVDSVDescriptor = VK_NULL_HANDLE;
+    if (pDesc->usage & EGPUTexutreViewUsage::GPU_TVU_RTV_DSV)
+    {
+        if (pVkDevice->mVkDeviceTable.vkCreateImageView(pVkDevice->pDevice,
+                                                        &createInfo,
+                                                        GLOBAL_VkAllocationCallbacks,
+                                                        &pVkTextureView->pVkRTVDSVDescriptor) != VK_SUCCESS)
+        {
+            assert(0);
+        }
+    }
+
+    return &pVkTextureView->super;
+}
+
+void GPUFreeTextureView_Vulkan(GPUTextureViewID pTextureView)
+{
+    GPUDevice_Vulkan* pVkDevice  = (GPUDevice_Vulkan*)pTextureView->pDevice;
+    GPUTextureView_Vulkan* pView = (GPUTextureView_Vulkan*)pTextureView;
+    if (pView->pVkRTVDSVDescriptor != VK_NULL_HANDLE)
+    {
+        pVkDevice->mVkDeviceTable.vkDestroyImageView(pVkDevice->pDevice, pView->pVkRTVDSVDescriptor, GLOBAL_VkAllocationCallbacks);
+    }
+    if (pView->pVkSRVDescriptor != VK_NULL_HANDLE)
+    {
+        pVkDevice->mVkDeviceTable.vkDestroyImageView(pVkDevice->pDevice, pView->pVkSRVDescriptor, GLOBAL_VkAllocationCallbacks);
+    }
+    if (pView->pVkUAVDescriptor != VK_NULL_HANDLE)
+    {
+        pVkDevice->mVkDeviceTable.vkDestroyImageView(pVkDevice->pDevice, pView->pVkUAVDescriptor, GLOBAL_VkAllocationCallbacks);
+    }
+
+    _aligned_free(pView);
+}
+
+GPUShaderLibraryID GPUCreateShaderLibrary_Vulkan(GPUDeviceID pDevice, GPUShaderLibraryDescriptor* pDesc)
+{
+    GPUDevice_Vulkan* pVkDevice = (GPUDevice_Vulkan*)pDevice;
+
+    VkShaderModuleCreateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    info.codeSize = pDesc->codeSize;
+    info.pCode    = pDesc->code;
+
+    GPUShaderLibrary_Vulkan* pShader = (GPUShaderLibrary_Vulkan*)malloc(sizeof(GPUShaderLibrary_Vulkan));
+    if (pVkDevice->mVkDeviceTable.vkCreateShaderModule(pVkDevice->pDevice, &info, GLOBAL_VkAllocationCallbacks, &pShader->pShader) != VK_SUCCESS)
+    {
+        assert(0);
+    }
+
+    return &pShader->super;
+}
+
+void GPUFreeShaderLibrary_Vulkan(GPUShaderLibraryID pShader)
+{
+    GPUShaderLibrary_Vulkan* pVkShader = (GPUShaderLibrary_Vulkan*)pShader;
+    GPUDevice_Vulkan* pVkDevice        = (GPUDevice_Vulkan*)pShader->pDevice;
+    pVkDevice->mVkDeviceTable.vkDestroyShaderModule(pVkDevice->pDevice, pVkShader->pShader, GLOBAL_VkAllocationCallbacks);
+    GPU_SAFE_FREE(pVkShader);
+}
+

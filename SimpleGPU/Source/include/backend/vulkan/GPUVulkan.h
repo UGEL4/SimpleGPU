@@ -35,6 +35,14 @@ extern "C" {
     GPUSwapchainID GPUCreateSwapchain_Vulkan(GPUDeviceID pDevice, GPUSwapchainDescriptor* pDesc);
     void GPUFreeSwapchain_Vulkan(GPUSwapchainID pSwapchain);
 
+    //texture & texture_view api
+    GPUTextureViewID GPUCreateTextureView_Vulkan(GPUDeviceID pDevice, const GPUTextureViewDescriptor* pDesc);
+    void GPUFreeTextureView_Vulkan(GPUTextureViewID pTextureView);
+
+    //shader
+    GPUShaderLibraryID GPUCreateShaderLibrary_Vulkan(GPUDeviceID pDevice, GPUShaderLibraryDescriptor* pDesc);
+    void GPUFreeShaderLibrary_Vulkan(GPUShaderLibraryID pShader);
+
 	typedef struct GPUInstance_Vulkan
 	{
 		GPUInstance super;
@@ -106,6 +114,20 @@ extern "C" {
             VkDeviceMemory pVkDeviceMemory;
         };
     } GPUTexture_Vulkan;
+
+    typedef struct GPUTextureView_Vulkan
+    {
+        GPUTextureView super;
+        VkImageView pVkRTVDSVDescriptor;
+        VkImageView pVkSRVDescriptor;
+        VkImageView pVkUAVDescriptor;
+    } GPUTextureView_vulkan;
+
+    typedef struct GPUShaderLibrary_Vulkan
+    {
+        GPUShaderLibrary super;
+        VkShaderModule pShader;
+    } GPUShaderLibrary_Vulkan;
 
 #ifdef __cplusplus
 }

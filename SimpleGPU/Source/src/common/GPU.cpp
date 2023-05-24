@@ -1,44 +1,44 @@
 #include "api.h"
 
 #ifdef GPU_USE_VULKAN
-#include "backend/vulkan/GPUVulkan.h"
+    #include "backend/vulkan/GPUVulkan.h"
 #endif
 
 #include <assert.h>
+#include <cstring>
 
 GPUInstanceID GPUCreateInstance(const GPUInstanceDescriptor* pDesc)
 {
-	assert(pDesc->backend == EGPUBackend::GPUBackend_Vulkan);
+    assert(pDesc->backend == EGPUBackend::GPUBackend_Vulkan);
 
-	const GPUProcTable* pProcTable = nullptr;
+    const GPUProcTable* pProcTable             = nullptr;
     const GPUSurfacesProcTable* pSurfacesTable = nullptr;
 
-	if (pDesc->backend == GPUBackend_Count)
-	{
-
-	}
+    if (pDesc->backend == GPUBackend_Count)
+    {
+    }
 #ifdef GPU_USE_VULKAN
-	else if (pDesc->backend == GPUBackend_Vulkan)
-	{
-		pProcTable = GPUVulkanProcTable();
+    else if (pDesc->backend == GPUBackend_Vulkan)
+    {
+        pProcTable     = GPUVulkanProcTable();
         pSurfacesTable = GPUVulkanSurfacesTable();
-	}
+    }
 #endif
 
-	GPUInstance* pInstance = (GPUInstance*)pProcTable->CreateInstance(pDesc);
-	pInstance->pProcTable = pProcTable;
+    GPUInstance* pInstance       = (GPUInstance*)pProcTable->CreateInstance(pDesc);
+    pInstance->pProcTable        = pProcTable;
     pInstance->pSurfaceProcTable = pSurfacesTable;
-	pInstance->backend = pDesc->backend;
+    pInstance->backend           = pDesc->backend;
 
-	return pInstance;
+    return pInstance;
 }
 
 void GPUFreeInstance(GPUInstanceID instance)
 {
-	assert(instance->backend == EGPUBackend::GPUBackend_Vulkan);
-	assert(instance->pProcTable->FreeInstance);
+    assert(instance->backend == EGPUBackend::GPUBackend_Vulkan);
+    assert(instance->pProcTable->FreeInstance);
 
-	instance->pProcTable->FreeInstance(instance);
+    instance->pProcTable->FreeInstance(instance);
 }
 
 void GPUEnumerateAdapters(GPUInstanceID pInstance, GPUAdapterID* const ppAdapters, uint32_t* adapterCount)
@@ -46,16 +46,16 @@ void GPUEnumerateAdapters(GPUInstanceID pInstance, GPUAdapterID* const ppAdapter
     assert(pInstance != NULL);
     assert(pInstance->pProcTable->EnumerateAdapters != NULL);
 
-	pInstance->pProcTable->EnumerateAdapters(pInstance, ppAdapters, adapterCount);
+    pInstance->pProcTable->EnumerateAdapters(pInstance, ppAdapters, adapterCount);
 
-	if (ppAdapters != NULL)
-	{
-		for (uint32_t i = 0; i < *adapterCount; i++)
-		{
+    if (ppAdapters != NULL)
+    {
+        for (uint32_t i = 0; i < *adapterCount; i++)
+        {
             *((const GPUProcTable**)&ppAdapters[i]->pProcTableCache) = pInstance->pProcTable;
-            *((GPUInstanceID*)&ppAdapters[i]->pInstance) = pInstance;
-		}
-	}
+            *((GPUInstanceID*)&ppAdapters[i]->pInstance)             = pInstance;
+        }
+    }
 }
 
 GPUDeviceID GPUCreateDevice(GPUAdapterID pAdapter, const GPUDeviceDescriptor* pDesc)
@@ -63,11 +63,11 @@ GPUDeviceID GPUCreateDevice(GPUAdapterID pAdapter, const GPUDeviceDescriptor* pD
     assert(pAdapter->pProcTableCache);
     assert(pAdapter->pProcTableCache->CreateDevice);
 
-	GPUDeviceID pDevice = pAdapter->pProcTableCache->CreateDevice(pAdapter, pDesc);
-	if (pDevice != nullptr)
-	{
+    GPUDeviceID pDevice = pAdapter->pProcTableCache->CreateDevice(pAdapter, pDesc);
+    if (pDevice != nullptr)
+    {
         *(const GPUProcTable**)&pDevice->pProcTableCache = pAdapter->pProcTableCache;
-	}
+    }
     return pDevice;
 }
 
@@ -84,15 +84,15 @@ GPUQueueID GPUGetQueue(GPUDeviceID pDevice, EGPUQueueType queueType, uint32_t qu
     assert(pDevice->pProcTableCache);
     assert(pDevice->pProcTableCache->GetQueue);
 
-	//try find queue
-	//if (q) {warning();return q;}
+    // try find queue
+    // if (q) {warning();return q;}
 
-	GPUQueue* pQueue = (GPUQueue*)pDevice->pProcTableCache->GetQueue(pDevice, queueType, queueIndex);
+    GPUQueue* pQueue   = (GPUQueue*)pDevice->pProcTableCache->GetQueue(pDevice, queueType, queueIndex);
     pQueue->pDevice    = pDevice;
     pQueue->queueType  = queueType;
     pQueue->queueIndex = queueIndex;
 
-	return pQueue;
+    return pQueue;
 }
 
 GPUSurfaceID GPUCreateSurfaceFromNativeView(GPUInstanceID pInstance, void* view)
@@ -101,7 +101,7 @@ GPUSurfaceID GPUCreateSurfaceFromNativeView(GPUInstanceID pInstance, void* view)
     return GPUCreateSurfaceFromHWND(pInstance, (HWND)view);
 #endif
 
-	return nullptr;
+    return nullptr;
 }
 
 void GPUFreeSurface(GPUInstanceID pInstance, GPUSurfaceID pSurface)
@@ -127,10 +127,10 @@ GPUSwapchainID GPUCreateSwapchain(GPUDeviceID pDevice, GPUSwapchainDescriptor* p
     assert(pDevice);
     assert(pDevice->pProcTableCache->CreateSwapchain);
 
-	GPUSwapchain* pSwapchain = (GPUSwapchain*)pDevice->pProcTableCache->CreateSwapchain(pDevice, pDesc);
-    pSwapchain->pDevice = pDevice;
+    GPUSwapchain* pSwapchain = (GPUSwapchain*)pDevice->pProcTableCache->CreateSwapchain(pDevice, pDesc);
+    pSwapchain->pDevice      = pDevice;
 
-	return pSwapchain;
+    return pSwapchain;
 }
 
 void GPUFreeSwapchain(GPUSwapchainID pSwapchain)
@@ -139,4 +139,42 @@ void GPUFreeSwapchain(GPUSwapchainID pSwapchain)
     GPUDeviceID pDevice = pSwapchain->pDevice;
     assert(pDevice->pProcTableCache->FreeSwapchain);
     pDevice->pProcTableCache->FreeSwapchain(pSwapchain);
+}
+
+GPUTextureViewID GPUCreateTextureView(GPUDeviceID pDevice, const struct GPUTextureViewDescriptor* pDesc)
+{
+    assert(pDevice);
+    assert(pDesc);
+    assert(pDevice->pProcTableCache->CreateTextureView);
+
+    GPUTextureView* pView = (GPUTextureView*)pDevice->pProcTableCache->CreateTextureView(pDevice, pDesc);
+    pView->pDevice        = pDevice;
+    pView->desc           = *pDesc;
+
+    return pView;
+}
+
+void GPUFreeTextureView(GPUTextureViewID pTextureView)
+{
+    assert(pTextureView);
+    assert(pTextureView->pDevice);
+    assert(pTextureView->pDevice->pProcTableCache->FreeTextureView);
+    pTextureView->pDevice->pProcTableCache->FreeTextureView(pTextureView);
+}
+
+GPUShaderLibraryID GPUCreateShaderLibrary(GPUDeviceID pDevice, GPUShaderLibraryDescriptor* pDesc)
+{
+    assert(pDevice);
+    assert(pDevice->pProcTableCache->CreateShaderLibrary);
+    GPUShaderLibrary* pShader = (GPUShaderLibrary*)pDevice->pProcTableCache->CreateShaderLibrary(pDevice, pDesc);
+    pShader->pDevice          = pDevice;
+    return pShader;
+}
+
+void GPUFreeShaderLibrary(GPUShaderLibraryID pShader)
+{
+    assert(pShader);
+    assert(pShader->pDevice);
+    assert(pShader->pDevice->pProcTableCache->FreeShaderLibrary);
+    pShader->pDevice->pProcTableCache->FreeShaderLibrary(pShader);
 }
