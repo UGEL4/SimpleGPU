@@ -735,3 +735,14 @@ void GPUFreeShaderLibrary_Vulkan(GPUShaderLibraryID pShader)
     GPU_SAFE_FREE(pVkShader);
 }
 
+GPURenderPipelineID GPUCreateRenderPipeline_Vulkan(GPUDeviceID pDevice, const GPURenderPipelineDescriptor* pDesc)
+{
+    GPUDevice_Vulkan* pVkDevice = (GPUDevice_Vulkan*)pDevice;
+
+    VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+    vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertexInputInfo.vertexBindingDescriptionCount = 0;
+    VkVertexInputBindingDescription vertexInputBindingDesc;
+    vertexInputInfo.vertexAttributeDescriptionCount = 0;
+    VkVertexInputAttributeDescription vertexInputAttributrDesc;
+}

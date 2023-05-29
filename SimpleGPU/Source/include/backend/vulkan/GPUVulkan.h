@@ -43,6 +43,9 @@ extern "C" {
     GPUShaderLibraryID GPUCreateShaderLibrary_Vulkan(GPUDeviceID pDevice, GPUShaderLibraryDescriptor* pDesc);
     void GPUFreeShaderLibrary_Vulkan(GPUShaderLibraryID pShader);
 
+    //pipeline
+    GPURenderPipelineID GPUCreateRenderPipeline_Vulkan(GPUDeviceID pDevice, const GPURenderPipelineDescriptor* pDesc);
+
 	typedef struct GPUInstance_Vulkan
 	{
 		GPUInstance super;
@@ -128,6 +131,30 @@ extern "C" {
         GPUShaderLibrary super;
         VkShaderModule pShader;
     } GPUShaderLibrary_Vulkan;
+
+    typedef struct SetLayout_Vulkan
+    {
+        VkDescriptorSetLayout pLayout;
+        VkDescriptorUpdateTemplate pUpdateTemplate;
+        uint32_t updateEntriesCount;
+        VkDescriptorSet pEmptyDescSet;
+    } SetLayout_Vulkan;
+
+    typedef struct GPURootSignature_Vulkan
+    {
+        GPURootSignature super;
+        VkPipelineLayout pPipelineLayout;
+        SetLayout_Vulkan* pSetLayouts;
+        VkDescriptorSetLayout* pVkSetLayouts;
+        uint32_t setLayoutsCount;
+        VkPushConstantRange* pPushConstantRanges;
+    } GPURootSignature_Vulkan;
+
+    typedef struct GPURenderPipeline_Vulkan
+    {
+        GPURenderPipeline super;
+        VkPipeline pPipeline;
+    } GPURenderPipeline_Vulkan;
 
 #ifdef __cplusplus
 }

@@ -27,6 +27,8 @@ DEFINE_GPU_OBJECT(GPUSwapchain)
 DEFINE_GPU_OBJECT(GPUTexture)
 DEFINE_GPU_OBJECT(GPUTextureView)
 DEFINE_GPU_OBJECT(GPUShaderLibrary)
+DEFINE_GPU_OBJECT(GPURootSignature)
+DEFINE_GPU_OBJECT(GPURenderPipeline)
 
 #ifdef __cplusplus
 extern "C" {
@@ -330,6 +332,22 @@ extern "C" {
         GPUShaderReflection* entry_reflections;
         uint32_t entrys_count;*/
     } CGPUShaderLibrary;
+
+    typedef struct GPURootSignature
+    {
+
+    } GPURootSignature;
+
+    typedef struct GPURenderPipelineDescriptor
+    {
+        GPURootSignatureID pRootSignature;
+    } GPURenderPipelineDescriptor;
+
+    typedef struct GPURenderPipeline
+    {
+        GPUDeviceID pDevice;
+        GPURootSignatureID pRootSignature;
+    } GPURenderPipeline;
 
 #ifdef __cplusplus
 }
