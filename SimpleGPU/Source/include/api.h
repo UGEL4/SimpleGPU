@@ -34,6 +34,8 @@ DEFINE_GPU_OBJECT(GPURenderPipeline)
 extern "C" {
 #endif
 
+    #define GPU_MAX_VERTEX_ATTRIBS 15
+
 	typedef enum EGPUBackend
 	{
 		GPUBackend_Vulkan = 0,
@@ -56,6 +58,9 @@ extern "C" {
 		GPU_FORMAT_B8G8R8A8_SRGB,
 		GPU_FORMAT_R8G8BA8_UNORM,
 		GPU_FORMAT_R8G8B8A8_SRGB,
+        GPU_FORMAT_R16_UINT,
+        GPU_FORMAT_R32_UINT,
+        GPU_FORMAT_R32_SFLOAT,
 		GPU_FORMT_COUNT
 	} EGPUFormat;
 
@@ -100,6 +105,14 @@ extern "C" {
         GPU_SHADER_STAGE_COUNT        = 6,
         GPU_SHADER_STAGE_MAX_ENUM_BIT = 0x7FFFFFFF
     } EGPUShaderStage;
+
+    typedef enum EGPUVertexInputRate
+    {
+        GPU_INPUT_RATE_VERTEX   = 0,
+        GPU_INPUT_RATE_INSTANCE = 1,
+        GPU_INPUT_RATE_COUNT,
+        GPU_INPUT_RATE_MAX_ENUM_BIT = 0x7FFFFFFF
+    } EGPUVertexInputRate;
 
 	//instance api
 	GPUInstanceID GPUCreateInstance(const struct GPUInstanceDescriptor* pDesc);
@@ -333,6 +346,33 @@ extern "C" {
         uint32_t entrys_count;*/
     } CGPUShaderLibrary;
 
+    typedef struct GPUShaderEntryDescriptor
+    {
+        GPUShaderLibraryID pLibrary;
+        const char8_t* entry;
+        EGPUShaderStage stage;
+        // ++ constant_specialization
+        //const CGPUConstantSpecialization* constants;
+        //uint32_t num_constants;
+        // -- constant_specialization
+    } CGPUShaderEntryDescriptor;
+
+    typedef struct GPUVertexAttribute
+    {
+        uint32_t arraySize;
+        EGPUFormat format;
+        uint32_t binding;
+        uint32_t offset;
+        uint32_t stride;
+        EGPUVertexInputRate rate;
+    } GPUVertexAttribute;
+
+    typedef struct GPUVertexLayout
+    {
+        uint32_t attributeCount;
+        GPUVertexAttribute attributes[GPU_MAX_VERTEX_ATTRIBS];
+    } GPUVertexLayout;
+
     typedef struct GPURootSignature
     {
 
@@ -341,6 +381,9 @@ extern "C" {
     typedef struct GPURenderPipelineDescriptor
     {
         GPURootSignatureID pRootSignature;
+        const GPUShaderEntryDescriptor* pVertexShader;
+        const GPUShaderEntryDescriptor* pFragmentShader;
+        const GPUVertexLayout* pVertexLayout;
     } GPURenderPipelineDescriptor;
 
     typedef struct GPURenderPipeline

@@ -739,10 +739,74 @@ GPURenderPipelineID GPUCreateRenderPipeline_Vulkan(GPUDeviceID pDevice, const GP
 {
     GPUDevice_Vulkan* pVkDevice = (GPUDevice_Vulkan*)pDevice;
 
+    // Vertex input state
+    uint32_t inputBindingCount = 0;
+    uint32_t inputAttribCount  = 0;
+    uint32_t attrCount         = pDesc->pVertexLayout->attributeCount > GPU_MAX_VERTEX_ATTRIBS ? GPU_MAX_VERTEX_ATTRIBS : pDesc->pVertexLayout->attributeCount;
+    uint32_t attribVal         = 0xffffffff;
+    for (uint32_t i = 0; i < attrCount; i++)
+    {
+        const GPUVertexAttribute* pAttrib = &pDesc->pVertexLayout->attributes[i];
+        uint32_t arraySize                = pAttrib->arraySize ? pAttrib->arraySize : 1;
+        if (attribVal != pAttrib->binding)
+        {
+            attribVal = pAttrib->binding;
+            inputBindingCount++;
+        }
+        for (uint32_t j = 0; j < arraySize; j++)
+        {
+            inputAttribCount += 1;
+        }
+    }
+    uint64_t dsize = sizeof(GPURenderPipeline_Vulkan);
+    uint64_t inputElemOffset = dsize;
+    dsize += (sizeof(VkVertexInputBindingDescription) * inputBindingCount);
+    uint64_t inputAttribsOffset = dsize;
+    dsize += (sizeof(VkVertexInputAttributeDescription) * inputAttribCount);
+    uint8_t* ptr                                   = (uint8_t*)malloc(dsize);
+    GPURenderPipeline_Vulkan* pRp                  = (GPURenderPipeline_Vulkan*)ptr;
+    VkVertexInputBindingDescription* pBindingDesc  = (VkVertexInputBindingDescription*)(ptr + inputElemOffset);
+    VkVertexInputAttributeDescription* pAttribDesc = (VkVertexInputAttributeDescription*)(ptr + inputAttribsOffset);
+
+    uint32_t slot = 0;
+    for (uint32_t i = 0; i < attrCount; i++)
+    {
+        const GPUVertexAttribute* pAttrib         = &pDesc->pVertexLayout->attributes[i];
+        uint32_t arraySize                        = pAttrib->arraySize ? pAttrib->arraySize : 1;
+        VkVertexInputBindingDescription* bindDesc = &pBindingDesc[i];
+        bindDesc->binding                         = pAttrib->binding;
+        if (pAttrib->rate == EGPUVertexInputRate::GPU_INPUT_RATE_VERTEX)
+        {
+            bindDesc->inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+        }
+        else
+        {
+            bindDesc->inputRate = VK_VERTEX_INPUT_RATE_INSTANCE;
+        }
+        bindDesc->stride = pAttrib->stride;
+
+        for (uint32_t j = 0; j < arraySize; j++)
+        {
+            pAttribDesc[slot].location = slot;
+            pAttribDesc[slot].binding  = pAttrib->binding;
+            pAttribDesc[slot].format   = GPUFormatToVulkanFormat(pAttrib->format);
+            pAttribDesc[slot].offset   = pAttrib->offset + (j * VulkanUtil_BitSizeOfBlock(pAttrib->format) / 8);
+            slot++;
+        }
+    }
+
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
-    vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertexInputInfo.vertexBindingDescriptionCount = 0;
-    VkVertexInputBindingDescription vertexInputBindingDesc;
-    vertexInputInfo.vertexAttributeDescriptionCount = 0;
-    VkVertexInputAttributeDescription vertexInputAttributrDesc;
+    vertexInputInfo.sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertexInputInfo.vertexBindingDescriptionCount   = inputBindingCount;
+    vertexInputInfo.pVertexBindingDescriptions      = pBindingDesc;
+    vertexInputInfo.vertexAttributeDescriptionCount = inputAttribCount;
+    vertexInputInfo.pVertexAttributeDescriptions    = pAttribDesc;
+
+    // shader stage
+    VkPipelineShaderStageCreateInfo vertexShaderStageCreateInfo{};
+    vertexShaderStageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    vertexShaderStageCreateInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    GPUShaderLibrary_Vulkan* pVkVShader = (GPUShaderLibrary_Vulkan*)pDesc->pVertexShader->pLibrary;
+    vertexShaderStageCreateInfo.module  = pVkVShader->pShader;
+    vertexShaderStageCreateInfo.pName   = (const char*)pDesc->pVertexShader->entry;
 }

@@ -22,6 +22,8 @@ extern "C" {
     void VulkanUtil_SelectPhysicalDeviceExtensions(GPUAdapter_Vulkan* pAdapter, const char** ppExtensions, uint32_t extensionsCount);
     void VulkanUtil_EnumFormatSupport(GPUAdapter_Vulkan* pAdapter);
 
+    uint32_t VulkanUtil_BitSizeOfBlock(EGPUFormat format);
+
     static const char* intanceWantedExtensions[] = {
         VK_KHR_SURFACE_EXTENSION_NAME,
 #if defined(VK_USE_PLATFORM_WIN32_KHR)

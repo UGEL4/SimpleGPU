@@ -245,3 +245,14 @@ void VulkanUtil_EnumFormatSupport(GPUAdapter_Vulkan* pAdapter)
         vkGetPhysicalDeviceFormatProperties(pAdapter->pPhysicalDevice, fmt, &formatProps);
     }
 }
+
+uint32_t VulkanUtil_BitSizeOfBlock(EGPUFormat format)
+{
+    switch (format)
+    {
+        case EGPUFormat::GPU_FORMAT_R16_UINT: return 2;
+        case EGPUFormat::GPU_FORMAT_R32_UINT: return 4;
+        case EGPUFormat::GPU_FORMAT_R32_SFLOAT: return 4;
+    }
+    return 0;
+}
