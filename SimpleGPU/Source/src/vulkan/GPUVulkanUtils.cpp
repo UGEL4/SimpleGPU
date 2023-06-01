@@ -256,3 +256,107 @@ uint32_t VulkanUtil_BitSizeOfBlock(EGPUFormat format)
     }
     return 0;
 }
+
+VkSampleCountFlagBits VulkanUtil_SampleCountToVk(EGPUSampleCount sampleCount)
+{
+    VkSampleCountFlagBits result = VK_SAMPLE_COUNT_1_BIT;
+    switch (sampleCount)
+    {
+        case GPU_SAMPLE_COUNT_1:
+            result = VK_SAMPLE_COUNT_1_BIT;
+            break;
+        case GPU_SAMPLE_COUNT_2:
+            result = VK_SAMPLE_COUNT_2_BIT;
+            break;
+        case GPU_SAMPLE_COUNT_4:
+            result = VK_SAMPLE_COUNT_4_BIT;
+            break;
+        case GPU_SAMPLE_COUNT_8:
+            result = VK_SAMPLE_COUNT_8_BIT;
+            break;
+        case GPU_SAMPLE_COUNT_16:
+            result = VK_SAMPLE_COUNT_16_BIT;
+            break;
+        default:
+            return result;
+    }
+    return result;
+}
+
+VkPrimitiveTopology VulkanUtil_PrimitiveTopologyToVk(EGPUPrimitiveTopology topology)
+{
+    VkPrimitiveTopology vk_topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    switch (topology)
+    {
+        case GPU_PRIM_TOPO_POINT_LIST:
+            vk_topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+            break;
+        case GPU_PRIM_TOPO_LINE_LIST:
+            vk_topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+            break;
+        case GPU_PRIM_TOPO_LINE_STRIP:
+            vk_topology = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;
+            break;
+        case GPU_PRIM_TOPO_TRI_STRIP:
+            vk_topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+            break;
+        case GPU_PRIM_TOPO_PATCH_LIST:
+            vk_topology = VK_PRIMITIVE_TOPOLOGY_PATCH_LIST;
+            break;
+        case GPU_PRIM_TOPO_TRI_LIST:
+            vk_topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+            break;
+        default:
+            assert(false);
+            break;
+    }
+    return vk_topology;
+}
+
+VkCompareOp VulkanUtil_CompareOpToVk(EGPUCompareMode compareMode)
+{
+    switch (compareMode)
+    {
+        case GPU_CMP_NEVER:
+            return VK_COMPARE_OP_NEVER;
+        case GPU_CMP_LESS:
+            return VK_COMPARE_OP_LESS;
+        case GPU_CMP_EQUAL:
+            return VK_COMPARE_OP_EQUAL;
+        case GPU_CMP_LEQUAL:
+            return VK_COMPARE_OP_LESS_OR_EQUAL;
+        case GPU_CMP_GREATER:
+            return VK_COMPARE_OP_GREATER;
+        case GPU_CMP_NOTEQUAL:
+            return VK_COMPARE_OP_NOT_EQUAL;
+        case GPU_CMP_GEQUAL:
+            return VK_COMPARE_OP_GREATER_OR_EQUAL;
+        case GPU_CMP_ALWAYS:
+            return VK_COMPARE_OP_ALWAYS;
+    }
+    return VK_COMPARE_OP_NEVER;
+}
+
+VkStencilOp VulkanUtil_StencilOpToVk(EGPUStencilOp op)
+{
+    switch (op)
+    {
+        case GPU_STENCIL_OP_KEEP:
+            return VK_STENCIL_OP_KEEP;
+        case GPU_STENCIL_OP_SET_ZERO:
+            return VK_STENCIL_OP_ZERO;
+        case GPU_STENCIL_OP_REPLACE:
+            return VK_STENCIL_OP_REPLACE;
+        case GPU_STENCIL_OP_INVERT:
+            return VK_STENCIL_OP_INVERT;
+        case GPU_STENCIL_OP_INCR:
+            return VK_STENCIL_OP_INCREMENT_AND_WRAP;
+        case GPU_STENCIL_OP_DECR:
+            return VK_STENCIL_OP_DECREMENT_AND_WRAP;
+        case GPU_STENCIL_OP_INCR_SAT:
+            return VK_STENCIL_OP_INCREMENT_AND_CLAMP;
+        case GPU_STENCIL_OP_DECR_SAT:
+            return VK_STENCIL_OP_DECREMENT_AND_CLAMP;
+    }
+    return VK_STENCIL_OP_KEEP;
+}

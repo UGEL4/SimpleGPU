@@ -114,6 +114,81 @@ extern "C" {
         GPU_INPUT_RATE_MAX_ENUM_BIT = 0x7FFFFFFF
     } EGPUVertexInputRate;
 
+    typedef enum EGPUSampleCount
+    {
+        GPU_SAMPLE_COUNT_1            = 1,
+        GPU_SAMPLE_COUNT_2            = 2,
+        GPU_SAMPLE_COUNT_4            = 4,
+        GPU_SAMPLE_COUNT_8            = 8,
+        GPU_SAMPLE_COUNT_16           = 16,
+        GPU_SAMPLE_COUNT_MAX_ENUM_BIT = 0x7FFFFFFF
+    } EGPUSampleCount;
+
+    typedef enum EGPUPrimitiveTopology
+    {
+        GPU_PRIM_TOPO_POINT_LIST = 0,
+        GPU_PRIM_TOPO_LINE_LIST,
+        GPU_PRIM_TOPO_LINE_STRIP,
+        GPU_PRIM_TOPO_TRI_LIST,
+        GPU_PRIM_TOPO_TRI_STRIP,
+        GPU_PRIM_TOPO_PATCH_LIST,
+        GPU_PRIM_TOPO_COUNT,
+        GPU_PRIM_TOPO_MAX_ENUM_BIT = 0x7FFFFFFF
+    } EGPUPrimitiveTopology;
+
+    typedef enum EGPUCompareMode
+    {
+        GPU_CMP_NEVER,
+        GPU_CMP_LESS,
+        GPU_CMP_EQUAL,
+        GPU_CMP_LEQUAL,
+        GPU_CMP_GREATER,
+        GPU_CMP_NOTEQUAL,
+        GPU_CMP_GEQUAL,
+        GPU_CMP_ALWAYS,
+        GPU_CMP_COUNT,
+        GPU_CMP_MAX_ENUM_BIT = 0x7FFFFFFF
+    } EGPUCompareMode;
+
+    typedef enum EGPUStencilOp
+    {
+        GPU_STENCIL_OP_KEEP,
+        GPU_STENCIL_OP_SET_ZERO,
+        GPU_STENCIL_OP_REPLACE,
+        GPU_STENCIL_OP_INVERT,
+        GPU_STENCIL_OP_INCR,
+        GPU_STENCIL_OP_DECR,
+        GPU_STENCIL_OP_INCR_SAT,
+        GPU_STENCIL_OP_DECR_SAT,
+        GPU_STENCIL_OP_COUNT,
+        GPU_STENCIL_OP_MAX_ENUM_BIT = 0x7FFFFFFF
+    } EGPUStencilOp;
+
+    typedef enum EGPUCullMode
+    {
+        GPU_CULL_MODE_NONE = 0,
+        GPU_CULL_MODE_BACK,
+        GPU_CULL_MODE_FRONT,
+        GPU_CULL_MODE_BOTH,
+        GPU_CULL_MODE_COUNT,
+        GPU_CULL_MODE_MAX_ENUM_BIT = 0x7FFFFFFF
+    } EGPUCullMode;
+
+    typedef enum EGPUFrontFace
+    {
+        GPU_FRONT_FACE_CCW = 0,
+        GPU_FRONT_FACE_CW,
+        GPU_FRONT_FACE_MAX_ENUM_BIT = 0x7FFFFFFF
+    } EGPUFrontFace;
+
+    typedef enum EGPUFillMode
+    {
+        GPU_FILL_MODE_SOLID,
+        GPU_FILL_MODE_WIREFRAME,
+        GPU_FILL_MODE_COUNT,
+        GPU_FILL_MODE_MAX_ENUM_BIT = 0x7FFFFFFF
+    } EGPUFillMode;
+
 	//instance api
 	GPUInstanceID GPUCreateInstance(const struct GPUInstanceDescriptor* pDesc);
 	typedef GPUInstanceID (*GPUProcCreateInstance)(const struct GPUInstanceDescriptor* pDesc);
@@ -378,12 +453,47 @@ extern "C" {
 
     } GPURootSignature;
 
+    typedef struct GPUDepthStateDesc
+    {
+        bool depthTest;
+        bool depthWrite;
+        EGPUCompareMode depthFunc;
+        bool stencilTest;
+        uint8_t stencilReadMask;
+        uint8_t stencilWriteMask;
+        EGPUCompareMode stencilFrontFunc;
+        EGPUStencilOp stencilFrontFail;
+        EGPUStencilOp depthFrontFail;
+        EGPUStencilOp stencilFrontPass;
+        EGPUCompareMode stencilBackFunc;
+        EGPUStencilOp stencilBackFail;
+        EGPUStencilOp depthBackFail;
+        EGPUStencilOp stencilBackPass;
+    } GPUDepthStateDesc;
+
+    typedef struct GPURasterizerStateDescriptor
+    {
+        EGPUCullMode cullMode;
+        int32_t depthBias;
+        float slopeScaledDepthBias;
+        EGPUFillMode fillMode;
+        EGPUFrontFace frontFace;
+        bool enableMultiSample;
+        bool enableScissor;
+        bool enableDepthClamp;
+    } GPURasterizerStateDescriptor;
+
     typedef struct GPURenderPipelineDescriptor
     {
         GPURootSignatureID pRootSignature;
         const GPUShaderEntryDescriptor* pVertexShader;
         const GPUShaderEntryDescriptor* pFragmentShader;
         const GPUVertexLayout* pVertexLayout;
+        const GPUDepthStateDesc* pDepthState;
+        const GPURasterizerStateDescriptor* pRasterizerState;
+
+        EGPUSampleCount samplerCount;
+        EGPUPrimitiveTopology primitiveTopology;
     } GPURenderPipelineDescriptor;
 
     typedef struct GPURenderPipeline

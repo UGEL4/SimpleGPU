@@ -23,6 +23,10 @@ extern "C" {
     void VulkanUtil_EnumFormatSupport(GPUAdapter_Vulkan* pAdapter);
 
     uint32_t VulkanUtil_BitSizeOfBlock(EGPUFormat format);
+    VkSampleCountFlagBits VulkanUtil_SampleCountToVk(EGPUSampleCount sampleCount);
+    VkPrimitiveTopology VulkanUtil_PrimitiveTopologyToVk(EGPUPrimitiveTopology topology);
+    VkCompareOp VulkanUtil_CompareOpToVk(EGPUCompareMode compareMode);
+    VkStencilOp VulkanUtil_StencilOpToVk(EGPUStencilOp op);
 
     static const char* intanceWantedExtensions[] = {
         VK_KHR_SURFACE_EXTENSION_NAME,
@@ -41,6 +45,22 @@ extern "C" {
 #if VK_KHR_device_group
         , VK_KHR_DEVICE_GROUP_EXTENSION_NAME
 #endif
+    };
+
+    static const VkCullModeFlagBits gVkCullModeTranslator[GPU_CULL_MODE_COUNT] = {
+        VK_CULL_MODE_NONE,
+        VK_CULL_MODE_BACK_BIT,
+        VK_CULL_MODE_FRONT_BIT
+    };
+
+    static const VkPolygonMode gVkFillModeTranslator[GPU_FILL_MODE_COUNT] = {
+        VK_POLYGON_MODE_FILL,
+        VK_POLYGON_MODE_LINE
+    };
+
+    static const VkFrontFace gVkFrontFaceTranslator[] = {
+        VK_FRONT_FACE_COUNTER_CLOCKWISE,
+        VK_FRONT_FACE_CLOCKWISE
     };
 
 #ifdef __cplusplus

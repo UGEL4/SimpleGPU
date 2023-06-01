@@ -803,10 +803,89 @@ GPURenderPipelineID GPUCreateRenderPipeline_Vulkan(GPUDeviceID pDevice, const GP
     vertexInputInfo.pVertexAttributeDescriptions    = pAttribDesc;
 
     // shader stage
-    VkPipelineShaderStageCreateInfo vertexShaderStageCreateInfo{};
-    vertexShaderStageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    vertexShaderStageCreateInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-    GPUShaderLibrary_Vulkan* pVkVShader = (GPUShaderLibrary_Vulkan*)pDesc->pVertexShader->pLibrary;
-    vertexShaderStageCreateInfo.module  = pVkVShader->pShader;
-    vertexShaderStageCreateInfo.pName   = (const char*)pDesc->pVertexShader->entry;
+    DECLEAR_ZERO_VAL(VkPipelineShaderStageCreateInfo, shaderStage, 2);
+    shaderStage[0].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    shaderStage[0].stage  = VK_SHADER_STAGE_VERTEX_BIT;
+    shaderStage[0].module = ((GPUShaderLibrary_Vulkan*)(pDesc->pVertexShader->pLibrary))->pShader;
+    shaderStage[0].pName  = (const char*)pDesc->pVertexShader->entry;
+    shaderStage[1].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    shaderStage[1].stage  = VK_SHADER_STAGE_FRAGMENT_BIT;
+    shaderStage[1].module = ((GPUShaderLibrary_Vulkan*)(pDesc->pFragmentShader->pLibrary))->pShader;
+    shaderStage[1].pName  = (const char*)pDesc->pFragmentShader->entry;
+
+    // Viewport state
+    VkPipelineViewportStateCreateInfo viewPort{};
+    viewPort.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewPort.viewportCount = 1;
+    viewPort.pViewports    = VK_NULL_HANDLE;
+    viewPort.scissorCount  = 1;
+    viewPort.pScissors     = VK_NULL_HANDLE;
+
+    VkDynamicState dyn_states[] = {
+        VK_DYNAMIC_STATE_VIEWPORT,
+        VK_DYNAMIC_STATE_SCISSOR,
+        VK_DYNAMIC_STATE_BLEND_CONSTANTS,
+        VK_DYNAMIC_STATE_DEPTH_BOUNDS,
+        VK_DYNAMIC_STATE_STENCIL_REFERENCE,
+//#if VK_KHR_fragment_shading_rate
+//        VK_DYNAMIC_STATE_FRAGMENT_SHADING_RATE_KHR
+//#endif
+    };
+    VkPipelineDynamicStateCreateInfo dyInfo {};
+    dyInfo.sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dyInfo.dynamicStateCount = sizeof(dyn_states) / sizeof(VkPipelineDynamicStateCreateInfo);
+    dyInfo.pDynamicStates    = dyn_states;
+
+    // Multi-sampling
+    VkPipelineMultisampleStateCreateInfo ms{};
+    ms.sType                 = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    ms.rasterizationSamples  = VulkanUtil_SampleCountToVk(pDesc->samplerCount);
+    ms.sampleShadingEnable   = VK_FALSE;
+    ms.minSampleShading      = 0.f;
+    ms.pSampleMask           = 0;
+    ms.alphaToCoverageEnable = VK_FALSE;
+    ms.alphaToOneEnable      = VK_FALSE;
+
+    //ia
+    VkPipelineInputAssemblyStateCreateInfo ia{};
+    ia.sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    ia.topology               = VulkanUtil_PrimitiveTopologyToVk(pDesc->primitiveTopology);
+    ia.primitiveRestartEnable = VK_FALSE;
+
+    // Depth stencil state
+    VkPipelineDepthStencilStateCreateInfo dss{};
+    dss.sType                 = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    dss.depthTestEnable       = pDesc->pDepthState->depthTest ? VK_TRUE : VK_FALSE;
+    dss.depthWriteEnable      = pDesc->pDepthState->depthWrite ? VK_TRUE : VK_FALSE;
+    dss.depthCompareOp        = VulkanUtil_CompareOpToVk(pDesc->pDepthState->depthFunc);
+    dss.depthBoundsTestEnable = VK_FALSE;
+    dss.stencilTestEnable     = pDesc->pDepthState->stencilTest ? VK_TRUE : VK_FALSE;
+    dss.front.failOp          = VulkanUtil_StencilOpToVk(pDesc->pDepthState->stencilFrontFail);
+    dss.front.passOp          = VulkanUtil_StencilOpToVk(pDesc->pDepthState->stencilFrontPass);
+    dss.front.depthFailOp     = VulkanUtil_StencilOpToVk(pDesc->pDepthState->depthFrontFail);
+    dss.front.compareOp       = VulkanUtil_CompareOpToVk(pDesc->pDepthState->stencilFrontFunc);
+    dss.front.compareMask     = pDesc->pDepthState->stencilReadMask;
+    dss.front.writeMask       = pDesc->pDepthState->stencilWriteMask;
+    dss.front.reference       = 0;
+    dss.back.failOp           = VulkanUtil_StencilOpToVk(pDesc->pDepthState->stencilBackFail);
+    dss.back.passOp           = VulkanUtil_StencilOpToVk(pDesc->pDepthState->stencilBackPass);
+    dss.back.depthFailOp      = VulkanUtil_StencilOpToVk(pDesc->pDepthState->depthBackFail);
+    dss.back.compareOp        = VulkanUtil_CompareOpToVk(pDesc->pDepthState->stencilBackFunc);
+    dss.back.compareMask      = pDesc->pDepthState->stencilReadMask;
+    dss.back.writeMask        = pDesc->pDepthState->stencilWriteMask;
+    dss.back.reference        = 0;
+    dss.minDepthBounds        = 0.f;
+    dss.maxDepthBounds        = 1.f;
+
+    // Rasterizer state
+    uint32_t depthBias = pDesc->pRasterizerState ? pDesc->pRasterizerState->depthBias : 0;
+    VkPipelineRasterizationStateCreateInfo rs{};
+    rs.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rs.depthClampEnable = pDesc->pRasterizerState->enableDepthClamp ? VK_TRUE : VK_FALSE;
+    rs.rasterizerDiscardEnable = VK_FALSE;
+    rs.polygonMode             = pDesc->pRasterizerState ? gVkFillModeTranslator[pDesc->pRasterizerState->fillMode] : VK_POLYGON_MODE_FILL;
+    rs.cullMode                = pDesc->pRasterizerState ? gVkCullModeTranslator[pDesc->pRasterizerState->cullMode] : VK_CULL_MODE_BACK_BIT;
+    rs.frontFace               = pDesc->pRasterizerState ? gVkFrontFaceTranslator[pDesc->pRasterizerState->frontFace] : VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    rs.depthBiasEnable         = (depthBias != 0) ? VK_TRUE : VK_FALS;
+
 }
