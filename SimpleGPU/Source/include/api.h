@@ -35,6 +35,7 @@ extern "C" {
 #endif
 
     #define GPU_MAX_VERTEX_ATTRIBS 15
+    #define GPU_MAX_MRT_COUNT 8u
 
 	typedef enum EGPUBackend
 	{
@@ -54,6 +55,7 @@ extern "C" {
 
 	typedef enum EGPUFormat
 	{
+        GPU_FORMAT_UNDEFINED,
 		GPU_FORMAT_B8G8R8A8_UNORM,
 		GPU_FORMAT_B8G8R8A8_SRGB,
 		GPU_FORMAT_R8G8BA8_UNORM,
@@ -113,16 +115,6 @@ extern "C" {
         GPU_INPUT_RATE_COUNT,
         GPU_INPUT_RATE_MAX_ENUM_BIT = 0x7FFFFFFF
     } EGPUVertexInputRate;
-
-    typedef enum EGPUSampleCount
-    {
-        GPU_SAMPLE_COUNT_1            = 1,
-        GPU_SAMPLE_COUNT_2            = 2,
-        GPU_SAMPLE_COUNT_4            = 4,
-        GPU_SAMPLE_COUNT_8            = 8,
-        GPU_SAMPLE_COUNT_16           = 16,
-        GPU_SAMPLE_COUNT_MAX_ENUM_BIT = 0x7FFFFFFF
-    } EGPUSampleCount;
 
     typedef enum EGPUPrimitiveTopology
     {
@@ -188,6 +180,53 @@ extern "C" {
         GPU_FILL_MODE_COUNT,
         GPU_FILL_MODE_MAX_ENUM_BIT = 0x7FFFFFFF
     } EGPUFillMode;
+
+    typedef enum EGPUBlendConstant
+    {
+        GPU_BLEND_CONST_ZERO = 0,
+        GPU_BLEND_CONST_ONE,
+        GPU_BLEND_CONST_SRC_COLOR,
+        GPU_BLEND_CONST_ONE_MINUS_SRC_COLOR,
+        GPU_BLEND_CONST_DST_COLOR,
+        GPU_BLEND_CONST_ONE_MINUS_DST_COLOR,
+        GPU_BLEND_CONST_SRC_ALPHA,
+        GPU_BLEND_CONST_ONE_MINUS_SRC_ALPHA,
+        GPU_BLEND_CONST_DST_ALPHA,
+        GPU_BLEND_CONST_ONE_MINUS_DST_ALPHA,
+        GPU_BLEND_CONST_SRC_ALPHA_SATURATE,
+        GPU_BLEND_CONST_BLEND_FACTOR,
+        GPU_BLEND_CONST_ONE_MINUS_BLEND_FACTOR,
+        GPU_BLEND_CONST_COUNT,
+        GPU_BLEND_CONST_MAX_ENUM_BIT = 0x7FFFFFFF
+    } EGPUBlendConstant;
+
+    typedef enum EGPUBlendMode
+    {
+        GPU_BLEND_MODE_ADD,
+        GPU_BLEND_MODE_SUBTRACT,
+        GPU_BLEND_MODE_REVERSE_SUBTRACT,
+        GPU_BLEND_MODE_MIN,
+        GPU_BLEND_MODE_MAX,
+        GPU_BLEND_MODE_COUNT,
+        GPU_BLEND_MODE_MAX_ENUM_BIT = 0x7FFFFFFF
+    } EGPUBlendMode;
+
+    typedef enum EGPULoadAction
+    {
+        GPU_LOAD_ACTION_DONTCARE,
+        GPU_LOAD_ACTION_LOAD,
+        GPU_LOAD_ACTION_CLEAR,
+        GPU_LOAD_ACTION_COUNT,
+        GPU_LOAD_ACTION_MAX_ENUM_BIT = 0x7FFFFFFF
+    } EGPULoadAction;
+
+    typedef enum EGPUStoreAction
+    {
+        GPU_STORE_ACTION_STORE,
+        GPU_STORE_ACTION_DISCARD,
+        GPU_STORE_ACTION_COUNT,
+        GPU_STORE_ACTION_MAX_ENUM_BIT = 0x7FFFFFFF
+    } EGPUStoreAction;
 
 	//instance api
 	GPUInstanceID GPUCreateInstance(const struct GPUInstanceDescriptor* pDesc);
@@ -483,6 +522,28 @@ extern "C" {
         bool enableDepthClamp;
     } GPURasterizerStateDescriptor;
 
+    typedef struct GPUBlendStateDescriptor
+    {
+        /// Source blend factor per render target.
+        EGPUBlendConstant srcFactors[GPU_MAX_MRT_COUNT];
+        /// Destination blend factor per render target.
+        EGPUBlendConstant dstFactors[GPU_MAX_MRT_COUNT];
+        /// Source alpha blend factor per render target.
+        EGPUBlendConstant srcAlphaFactors[GPU_MAX_MRT_COUNT];
+        /// Destination alpha blend factor per render target.
+        EGPUBlendConstant dstAlphaFactors[GPU_MAX_MRT_COUNT];
+        /// Blend mode per render target.
+        EGPUBlendMode blendModes[GPU_MAX_MRT_COUNT];
+        /// Alpha blend mode per render target.
+        EGPUBlendMode blendAlphaModes[GPU_MAX_MRT_COUNT];
+        /// Write mask per render target.
+        int32_t masks[GPU_MAX_MRT_COUNT];
+        /// Set whether alpha to coverage should be enabled.
+        bool alphaTCoverage;
+        /// Set whether each render target has an unique blend function. When false the blend function in slot 0 will be used for all render targets.
+        bool independentBlend;
+    } GPUBlendStateDescriptor;
+
     typedef struct GPURenderPipelineDescriptor
     {
         GPURootSignatureID pRootSignature;
@@ -491,9 +552,11 @@ extern "C" {
         const GPUVertexLayout* pVertexLayout;
         const GPUDepthStateDesc* pDepthState;
         const GPURasterizerStateDescriptor* pRasterizerState;
+        const GPUBlendStateDescriptor* pBlendState;
 
         EGPUSampleCount samplerCount;
         EGPUPrimitiveTopology primitiveTopology;
+        uint32_t renderTargetCount;
     } GPURenderPipelineDescriptor;
 
     typedef struct GPURenderPipeline

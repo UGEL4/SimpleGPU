@@ -881,11 +881,75 @@ GPURenderPipelineID GPUCreateRenderPipeline_Vulkan(GPUDeviceID pDevice, const GP
     uint32_t depthBias = pDesc->pRasterizerState ? pDesc->pRasterizerState->depthBias : 0;
     VkPipelineRasterizationStateCreateInfo rs{};
     rs.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-    rs.depthClampEnable = pDesc->pRasterizerState->enableDepthClamp ? VK_TRUE : VK_FALSE;
+    rs.depthClampEnable        = pDesc->pRasterizerState ? (pDesc->pRasterizerState->enableDepthClamp ? VK_TRUE : VK_FALSE) : VK_FALSE;
     rs.rasterizerDiscardEnable = VK_FALSE;
     rs.polygonMode             = pDesc->pRasterizerState ? gVkFillModeTranslator[pDesc->pRasterizerState->fillMode] : VK_POLYGON_MODE_FILL;
     rs.cullMode                = pDesc->pRasterizerState ? gVkCullModeTranslator[pDesc->pRasterizerState->cullMode] : VK_CULL_MODE_BACK_BIT;
     rs.frontFace               = pDesc->pRasterizerState ? gVkFrontFaceTranslator[pDesc->pRasterizerState->frontFace] : VK_FRONT_FACE_COUNTER_CLOCKWISE;
-    rs.depthBiasEnable         = (depthBias != 0) ? VK_TRUE : VK_FALS;
+    rs.depthBiasEnable         = (depthBias != 0) ? VK_TRUE : VK_FALSE;
+    rs.depthBiasConstantFactor = pDesc->pRasterizerState ? pDesc->pRasterizerState->depthBias : 0.f;
+    rs.depthBiasClamp          = 0.f;
+    rs.depthBiasSlopeFactor    = pDesc->pRasterizerState ? pDesc->pRasterizerState->slopeScaledDepthBias : 0.f;
+    rs.lineWidth               = 1.f;
 
+     // Color blending state
+    VkPipelineColorBlendAttachmentState colorBlendattachments[GPU_MAX_MRT_COUNT] = {};
+    uint32_t blendDescIndex = 0;
+    for (int i = 0; i < GPU_MAX_MRT_COUNT; ++i)
+    {
+        VkBool32 blendEnable =
+        (gVkBlendConstantTranslator[pDesc->pBlendState->srcFactors[blendDescIndex]] != VK_BLEND_FACTOR_ONE ||
+         gVkBlendConstantTranslator[pDesc->pBlendState->dstFactors[blendDescIndex]] != VK_BLEND_FACTOR_ZERO ||
+         gVkBlendConstantTranslator[pDesc->pBlendState->srcAlphaFactors[blendDescIndex]] != VK_BLEND_FACTOR_ONE ||
+         gVkBlendConstantTranslator[pDesc->pBlendState->dstAlphaFactors[blendDescIndex]] != VK_BLEND_FACTOR_ZERO);
+
+        colorBlendattachments[i].blendEnable         = blendEnable;
+        colorBlendattachments[i].srcColorBlendFactor = gVkBlendConstantTranslator[pDesc->pBlendState->srcFactors[blendDescIndex]];
+        colorBlendattachments[i].dstColorBlendFactor = gVkBlendConstantTranslator[pDesc->pBlendState->dstFactors[blendDescIndex]];
+        colorBlendattachments[i].colorBlendOp        = gVkBlendOpTranslator[pDesc->pBlendState->blendModes[blendDescIndex]];
+        colorBlendattachments[i].srcAlphaBlendFactor = gVkBlendConstantTranslator[pDesc->pBlendState->srcAlphaFactors[blendDescIndex]];
+        colorBlendattachments[i].dstAlphaBlendFactor = gVkBlendConstantTranslator[pDesc->pBlendState->dstAlphaFactors[blendDescIndex]];
+        colorBlendattachments[i].alphaBlendOp        = gVkBlendOpTranslator[pDesc->pBlendState->blendAlphaModes[blendDescIndex]];
+        colorBlendattachments[i].colorWriteMask      = pDesc->pBlendState->masks[blendDescIndex];
+
+        if (pDesc->pBlendState->independentBlend)
+            ++blendDescIndex;
+    }
+    VkPipelineColorBlendStateCreateInfo cbs = {
+        .sType             = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+        .pNext             = NULL,
+        .flags             = 0,
+        .logicOpEnable     = VK_FALSE,
+        .logicOp           = VK_LOGIC_OP_COPY,
+        .attachmentCount   = pDesc->renderTargetCount,
+        .pAttachments      = colorBlendattachments
+    };
+    cbs.blendConstants[0] = 0.0f,
+    cbs.blendConstants[1] = 0.0f,
+    cbs.blendConstants[2] = 0.0f,
+    cbs.blendConstants[3] = 0.0f;
+
+    assert(pDesc->renderTargetCount > 0);
+}
+
+static void CreateRenderPass(const GPUDevice_Vulkan* pDevice, const VulkanRenderPassDescriptor* pDesc, VkRenderPass& pVkPass)
+{
+    uint32_t attachmentCount = pDesc->attachmentCount;
+    uint32_t depthCount      = (pDesc->depthFormat == GPU_FORMAT_UNDEFINED) ? 0 : 1;
+    VkAttachmentDescription attachments[GPU_MAX_MRT_COUNT + 1] = {0};
+
+    for (uint32_t i = 0; i < attachmentCount; i++)
+    {
+        attachments[i].format        = GPUFormatToVulkanFormat(pDesc->pColorFormat[i]);
+        attachments[i].samples       = VulkanUtil_SampleCountToVk(pDesc->sampleCount);
+        attachments[i].loadOp        = gVkAttachmentLoadOpTranslator[pDesc->pColorLoadOps[i]];
+        attachments[i].storeOp       = gVkAttachmentStoreOpTranslator[pDesc->pColorStoreOps[i]];
+        attachments[i].initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        attachments[i].finalLayout   = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        //color references
+    }
+
+    VkRenderPassCreateInfo createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    createInfo.attachmentCount = pDesc->attachmentCount;
 }

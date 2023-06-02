@@ -150,6 +150,16 @@ extern "C" {
         VkPushConstantRange* pPushConstantRanges;
     } GPURootSignature_Vulkan;
 
+    typedef struct VulkanRenderPassDescriptor
+    {
+        EGPUFormat pColorFormat[GPU_MAX_MRT_COUNT];
+        EGPULoadAction pColorLoadOps[GPU_MAX_MRT_COUNT];
+        EGPUStoreAction pColorStoreOps[GPU_MAX_MRT_COUNT];
+        uint32_t attachmentCount;
+        EGPUFormat depthFormat;
+        EGPUSampleCount sampleCount;
+    } VulkanRenderPassDescriptor;
+
     typedef struct GPURenderPipeline_Vulkan
     {
         GPURenderPipeline super;

@@ -63,6 +63,41 @@ extern "C" {
         VK_FRONT_FACE_CLOCKWISE
     };
 
+    static const VkBlendFactor gVkBlendConstantTranslator[GPU_BLEND_CONST_COUNT] = {
+        VK_BLEND_FACTOR_ZERO,
+        VK_BLEND_FACTOR_ONE,
+        VK_BLEND_FACTOR_SRC_COLOR,
+        VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR,
+        VK_BLEND_FACTOR_DST_COLOR,
+        VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR,
+        VK_BLEND_FACTOR_SRC_ALPHA,
+        VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+        VK_BLEND_FACTOR_DST_ALPHA,
+        VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA,
+        VK_BLEND_FACTOR_SRC_ALPHA_SATURATE,
+        VK_BLEND_FACTOR_CONSTANT_COLOR,
+        VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR,
+    };
+
+    static const VkBlendOp gVkBlendOpTranslator[GPU_BLEND_MODE_COUNT] = {
+        VK_BLEND_OP_ADD,
+        VK_BLEND_OP_SUBTRACT,
+        VK_BLEND_OP_REVERSE_SUBTRACT,
+        VK_BLEND_OP_MIN,
+        VK_BLEND_OP_MAX,
+    };
+
+    static const VkAttachmentLoadOp gVkAttachmentLoadOpTranslator[GPU_LOAD_ACTION_COUNT] = {
+        VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        VK_ATTACHMENT_LOAD_OP_LOAD,
+        VK_ATTACHMENT_LOAD_OP_CLEAR,
+    };
+
+    static const VkAttachmentStoreOp gVkAttachmentStoreOpTranslator[GPU_STORE_ACTION_COUNT] = {
+        VK_ATTACHMENT_STORE_OP_STORE,
+        VK_ATTACHMENT_STORE_OP_DONT_CARE
+    };
+
 #ifdef __cplusplus
 }
 #endif // __cplusplus
