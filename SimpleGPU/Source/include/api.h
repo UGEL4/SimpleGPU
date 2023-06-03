@@ -37,6 +37,13 @@ extern "C" {
     #define GPU_MAX_VERTEX_ATTRIBS 15
     #define GPU_MAX_MRT_COUNT 8u
 
+    #define GPU_COLOR_MASK_RED 0x1
+    #define GPU_COLOR_MASK_GREEN 0x2
+    #define GPU_COLOR_MASK_BLUE 0x4
+    #define GPU_COLOR_MASK_ALPHA 0x8
+    #define GPU_COLOR_MASK_ALL GPU_COLOR_MASK_RED | GPU_COLOR_MASK_GREEN | GPU_COLOR_MASK_BLUE | GPU_COLOR_MASK_ALPHA
+    #define GPU_COLOR_MASK_NONE 0
+
 	typedef enum EGPUBackend
 	{
 		GPUBackend_Vulkan = 0,
@@ -283,6 +290,12 @@ extern "C" {
     void GPUFreeShaderLibrary(GPUShaderLibraryID pShader);
     typedef void (*GPUProcFreeShaderLibrary)(GPUShaderLibraryID pShader);
 
+    // pipeline
+    GPURenderPipelineID GPUCreateRenderPipeline(GPUDeviceID pDevice, const GPURenderPipelineDescriptor* pDesc);
+    typedef GPURenderPipelineID (*GPUProcCreateRenderPipeline)(GPUDeviceID pDevice, const GPURenderPipelineDescriptor* pDesc);
+    void GPUFreeRenderPipeline(GPURenderPipelineID pPipeline);
+    typedef void (*GPUProcFreeRenderPipeline)(GPURenderPipelineID pPipeline);
+
 	typedef struct GPUProcTable
 	{
 		//instance api
@@ -308,6 +321,10 @@ extern "C" {
         //shader
         const GPUProcCreateShaderLibrary CreateShaderLibrary;
         const GPUProcFreeShaderLibrary FreeShaderLibrary;
+
+        //pipeline
+        const GPUProcCreateRenderPipeline CreateRenderPipeline;
+        const GPUProcFreeRenderPipeline FreeRenderPipeline;
 	}GPUProcTable;
 
 	typedef struct CGPUChainedDescriptor {
@@ -556,7 +573,10 @@ extern "C" {
 
         EGPUSampleCount samplerCount;
         EGPUPrimitiveTopology primitiveTopology;
+
+        EGPUFormat* pColorFormats;
         uint32_t renderTargetCount;
+        EGPUFormat depthStencilFormat;
     } GPURenderPipelineDescriptor;
 
     typedef struct GPURenderPipeline

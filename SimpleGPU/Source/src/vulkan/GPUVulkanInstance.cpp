@@ -53,18 +53,20 @@ public:
 };
 
 const GPUProcTable vkTable = {
-    .CreateInstance      = &CreateInstance_Vulkan,
-    .FreeInstance        = &FreeInstance_Vllkan,
-    .EnumerateAdapters   = &EnumerateAdapters_Vulkan,
-    .CreateDevice        = &CreateDevice_Vulkan,
-    .FreeDevice          = &FreeDevice_Vulkan,
-    .GetQueue            = &GetQueue_Vulkan,
-    .CreateSwapchain     = &GPUCreateSwapchain_Vulkan,
-    .FreeSwapchain       = &GPUFreeSwapchain_Vulkan,
-    .CreateTextureView   = &GPUCreateTextureView_Vulkan,
-    .FreeTextureView     = &GPUFreeTextureView_Vulkan,
-    .CreateShaderLibrary = &GPUCreateShaderLibrary_Vulkan,
-    .FreeShaderLibrary   = &GPUFreeShaderLibrary_Vulkan
+    .CreateInstance       = &CreateInstance_Vulkan,
+    .FreeInstance         = &FreeInstance_Vllkan,
+    .EnumerateAdapters    = &EnumerateAdapters_Vulkan,
+    .CreateDevice         = &CreateDevice_Vulkan,
+    .FreeDevice           = &FreeDevice_Vulkan,
+    .GetQueue             = &GetQueue_Vulkan,
+    .CreateSwapchain      = &GPUCreateSwapchain_Vulkan,
+    .FreeSwapchain        = &GPUFreeSwapchain_Vulkan,
+    .CreateTextureView    = &GPUCreateTextureView_Vulkan,
+    .FreeTextureView      = &GPUFreeTextureView_Vulkan,
+    .CreateShaderLibrary  = &GPUCreateShaderLibrary_Vulkan,
+    .FreeShaderLibrary    = &GPUFreeShaderLibrary_Vulkan,
+    .CreateRenderPipeline = &GPUCreateRenderPipeline_Vulkan,
+    .FreeRenderPipeline   = &GPUFreeRenderPipeline_Vulkan
 };
 const GPUProcTable* GPUVulkanProcTable()
 {
@@ -735,9 +737,65 @@ void GPUFreeShaderLibrary_Vulkan(GPUShaderLibraryID pShader)
     GPU_SAFE_FREE(pVkShader);
 }
 
+static void CreateRenderPass(const GPUDevice_Vulkan* pDevice, const VulkanRenderPassDescriptor* pDesc, VkRenderPass* pVkPass)
+{
+    uint32_t attachmentCount                                     = pDesc->attachmentCount;
+    uint32_t depthCount                                          = (pDesc->depthFormat == GPU_FORMAT_UNDEFINED) ? 0 : 1;
+    VkAttachmentDescription attachments[GPU_MAX_MRT_COUNT + 1]   = { 0 };
+    VkAttachmentReference colorAttachmentRefs[GPU_MAX_MRT_COUNT] = { 0 };
+    VkAttachmentReference depthStencilAttachmentRef[1]           = { 0 };
+
+    for (uint32_t i = 0; i < attachmentCount; i++)
+    {
+        attachments[i].format        = GPUFormatToVulkanFormat(pDesc->pColorFormat[i]);
+        attachments[i].samples       = VulkanUtil_SampleCountToVk(pDesc->sampleCount);
+        attachments[i].loadOp        = gVkAttachmentLoadOpTranslator[pDesc->pColorLoadOps[i]];
+        attachments[i].storeOp       = gVkAttachmentStoreOpTranslator[pDesc->pColorStoreOps[i]];
+        attachments[i].initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        attachments[i].finalLayout   = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        // color references
+        colorAttachmentRefs[i].attachment = i;
+        colorAttachmentRefs[i].layout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    }
+
+    if (depthCount > 0)
+    {
+        attachments[attachmentCount].format         = GPUFormatToVulkanFormat(pDesc->depthFormat);
+        attachments[attachmentCount].samples        = VulkanUtil_SampleCountToVk(pDesc->sampleCount);
+        attachments[attachmentCount].loadOp         = gVkAttachmentLoadOpTranslator[pDesc->depthLoadOp];
+        attachments[attachmentCount].storeOp        = gVkAttachmentStoreOpTranslator[pDesc->depthStoreOp];
+        attachments[attachmentCount].stencilLoadOp  = gVkAttachmentLoadOpTranslator[pDesc->stencilLoadOp];
+        attachments[attachmentCount].stencilStoreOp = gVkAttachmentStoreOpTranslator[pDesc->stencilStoreOp];
+        attachments[attachmentCount].initialLayout  = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        attachments[attachmentCount].finalLayout    = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        // depth reference
+        depthStencilAttachmentRef[0].attachment = attachmentCount;
+        depthStencilAttachmentRef[0].layout     = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    }
+
+    VkSubpassDescription subPass{};
+    subPass.pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subPass.colorAttachmentCount    = attachmentCount;
+    subPass.pColorAttachments       = colorAttachmentRefs;
+    subPass.pDepthStencilAttachment = (depthCount > 0) ? depthStencilAttachmentRef : VK_NULL_HANDLE;
+
+    VkRenderPassCreateInfo createInfo{};
+    createInfo.sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    createInfo.attachmentCount = pDesc->attachmentCount + 1; // color attachment + depth attachment
+    createInfo.pAttachments    = attachments;
+    createInfo.subpassCount    = 1;
+    createInfo.pSubpasses      = &subPass;
+    createInfo.dependencyCount = 0;
+    createInfo.pDependencies   = VK_NULL_HANDLE;
+
+    VkResult rs = pDevice->mVkDeviceTable.vkCreateRenderPass(pDevice->pDevice, &createInfo, GLOBAL_VkAllocationCallbacks, pVkPass);
+    assert(rs == VK_SUCCESS);
+}
+
 GPURenderPipelineID GPUCreateRenderPipeline_Vulkan(GPUDeviceID pDevice, const GPURenderPipelineDescriptor* pDesc)
 {
     GPUDevice_Vulkan* pVkDevice = (GPUDevice_Vulkan*)pDevice;
+    GPURootSignature_Vulkan* pVkRS = (GPURootSignature_Vulkan*)pDesc->pRootSignature;
 
     // Vertex input state
     uint32_t inputBindingCount = 0;
@@ -803,7 +861,8 @@ GPURenderPipelineID GPUCreateRenderPipeline_Vulkan(GPUDeviceID pDevice, const GP
     vertexInputInfo.pVertexAttributeDescriptions    = pAttribDesc;
 
     // shader stage
-    DECLEAR_ZERO_VAL(VkPipelineShaderStageCreateInfo, shaderStage, 2);
+    uint32_t shaderStagCount = 2;
+    DECLEAR_ZERO_VAL(VkPipelineShaderStageCreateInfo, shaderStage, shaderStagCount);
     shaderStage[0].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     shaderStage[0].stage  = VK_SHADER_STAGE_VERTEX_BIT;
     shaderStage[0].module = ((GPUShaderLibrary_Vulkan*)(pDesc->pVertexShader->pLibrary))->pShader;
@@ -930,26 +989,44 @@ GPURenderPipelineID GPUCreateRenderPipeline_Vulkan(GPUDeviceID pDevice, const GP
     cbs.blendConstants[3] = 0.0f;
 
     assert(pDesc->renderTargetCount > 0);
+    VkRenderPass pRenderPass = VK_NULL_HANDLE;
+    VulkanRenderPassDescriptor renderPassDesc{};
+    renderPassDesc.attachmentCount = pDesc->renderTargetCount;
+    renderPassDesc.sampleCount     = pDesc->samplerCount;
+    renderPassDesc.depthFormat     = pDesc->depthStencilFormat;
+    for (uint32_t i = 0; i < pDesc->renderTargetCount; i++)
+    {
+        renderPassDesc.pColorFormat[i] = pDesc->pColorFormats[i];
+    }
+    CreateRenderPass(pVkDevice, &renderPassDesc, &pRenderPass);
+    VkGraphicsPipelineCreateInfo pipelineCreateInfo{};
+    pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipelineCreateInfo.stageCount = shaderStagCount;
+    pipelineCreateInfo.pStages    = shaderStage;
+    pipelineCreateInfo.pVertexInputState = &vertexInputInfo;
+    pipelineCreateInfo.pInputAssemblyState = &ia;
+    pipelineCreateInfo.pTessellationState  = VK_NULL_HANDLE;
+    pipelineCreateInfo.pViewportState      = &viewPort;
+    pipelineCreateInfo.pRasterizationState = &rs;
+    pipelineCreateInfo.pMultisampleState   = &ms;
+    pipelineCreateInfo.pDepthStencilState  = &dss;
+    pipelineCreateInfo.pColorBlendState    = &cbs;
+    pipelineCreateInfo.pDynamicState       = &dyInfo;
+    pipelineCreateInfo.layout              = pVkRS->pPipelineLayout;
+    pipelineCreateInfo.renderPass          = pRenderPass;
+    pipelineCreateInfo.subpass             = 0;
+
+    VkResult result = pVkDevice->mVkDeviceTable.vkCreateGraphicsPipelines(pVkDevice->pDevice, VK_NULL_HANDLE, 1, &pipelineCreateInfo, GLOBAL_VkAllocationCallbacks, &pRp->pPipeline);
+    assert(result == VK_SUCCESS);
+
+    return &pRp->super;
 }
 
-static void CreateRenderPass(const GPUDevice_Vulkan* pDevice, const VulkanRenderPassDescriptor* pDesc, VkRenderPass& pVkPass)
+void GPUFreeRenderPipeline_Vulkan(GPURenderPipelineID pPipeline)
 {
-    uint32_t attachmentCount = pDesc->attachmentCount;
-    uint32_t depthCount      = (pDesc->depthFormat == GPU_FORMAT_UNDEFINED) ? 0 : 1;
-    VkAttachmentDescription attachments[GPU_MAX_MRT_COUNT + 1] = {0};
+    GPUDevice_Vulkan* pVkDevice = (GPUDevice_Vulkan*)pPipeline->pDevice;
+    GPURenderPipeline_Vulkan* pVkRpr = (GPURenderPipeline_Vulkan*)pPipeline;
 
-    for (uint32_t i = 0; i < attachmentCount; i++)
-    {
-        attachments[i].format        = GPUFormatToVulkanFormat(pDesc->pColorFormat[i]);
-        attachments[i].samples       = VulkanUtil_SampleCountToVk(pDesc->sampleCount);
-        attachments[i].loadOp        = gVkAttachmentLoadOpTranslator[pDesc->pColorLoadOps[i]];
-        attachments[i].storeOp       = gVkAttachmentStoreOpTranslator[pDesc->pColorStoreOps[i]];
-        attachments[i].initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        attachments[i].finalLayout   = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        //color references
-    }
-
-    VkRenderPassCreateInfo createInfo{};
-    createInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    createInfo.attachmentCount = pDesc->attachmentCount;
+    pVkDevice->mVkDeviceTable.vkDestroyPipeline(pVkDevice->pDevice, pVkRpr->pPipeline, GLOBAL_VkAllocationCallbacks);
+    GPU_SAFE_FREE(pVkRpr);
 }

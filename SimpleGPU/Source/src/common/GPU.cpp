@@ -178,3 +178,27 @@ void GPUFreeShaderLibrary(GPUShaderLibraryID pShader)
     assert(pShader->pDevice->pProcTableCache->FreeShaderLibrary);
     pShader->pDevice->pProcTableCache->FreeShaderLibrary(pShader);
 }
+
+static const GPUBlendStateDescriptor sDefaulBlendState = {
+    .srcFactors[0] = GPU_BLEND_CONST_ONE,
+    .dstFactors[0] = GPU_BLEND_CONST_ZERO,
+    .srcAlphaFactors[0] = GPU_BLEND_CONST_ONE,
+    .dstAlphaFactors[0] = GPU_BLEND_CONST_ZERO,
+    .blendModes[0] = GPU_BLEND_MODE_ADD,
+    .masks[0] = GPU_COLOR_MASK_ALL,
+    .independentBlend = false
+};
+
+GPURenderPipelineID GPUCreateRenderPipeline(GPUDeviceID pDevice, const GPURenderPipelineDescriptor* pDesc)
+{
+    assert(pDevice);
+    assert(pDevice->pProcTableCache->CreateRenderPipeline);
+    GPURenderPipelineDescriptor newDesc{};
+    if (pDesc->samplerCount == 0) newDesc.samplerCount = GPU_SAMPLE_COUNT_1;
+    if (pDesc->pBlendState == NULL) newDesc.pBlendState = &sDefaulBlendState;
+}
+
+void GPUFreeRenderPipeline(GPURenderPipelineID pPipeline)
+{
+
+}

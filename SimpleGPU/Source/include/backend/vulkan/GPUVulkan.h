@@ -45,6 +45,7 @@ extern "C" {
 
     //pipeline
     GPURenderPipelineID GPUCreateRenderPipeline_Vulkan(GPUDeviceID pDevice, const GPURenderPipelineDescriptor* pDesc);
+    void GPUFreeRenderPipeline_Vulkan(GPURenderPipelineID pPipeline);
 
 	typedef struct GPUInstance_Vulkan
 	{
@@ -158,6 +159,10 @@ extern "C" {
         uint32_t attachmentCount;
         EGPUFormat depthFormat;
         EGPUSampleCount sampleCount;
+        EGPULoadAction depthLoadOp;
+        EGPUStoreAction depthStoreOp;
+        EGPULoadAction stencilLoadOp;
+        EGPUStoreAction stencilStoreOp;
     } VulkanRenderPassDescriptor;
 
     typedef struct GPURenderPipeline_Vulkan
