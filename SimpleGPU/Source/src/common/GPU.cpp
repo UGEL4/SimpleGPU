@@ -6,6 +6,7 @@
 
 #include <assert.h>
 #include <cstring>
+#include <memory>
 
 GPUInstanceID GPUCreateInstance(const GPUInstanceDescriptor* pDesc)
 {
@@ -162,12 +163,16 @@ void GPUFreeTextureView(GPUTextureViewID pTextureView)
     pTextureView->pDevice->pProcTableCache->FreeTextureView(pTextureView);
 }
 
-GPUShaderLibraryID GPUCreateShaderLibrary(GPUDeviceID pDevice, GPUShaderLibraryDescriptor* pDesc)
+GPUShaderLibraryID GPUCreateShaderLibrary(GPUDeviceID pDevice, const GPUShaderLibraryDescriptor* pDesc)
 {
     assert(pDevice);
     assert(pDevice->pProcTableCache->CreateShaderLibrary);
     GPUShaderLibrary* pShader = (GPUShaderLibrary*)pDevice->pProcTableCache->CreateShaderLibrary(pDevice, pDesc);
     pShader->pDevice          = pDevice;
+    const size_t str_len      = strlen((const char*)pDesc->pName);
+    const size_t str_size     = str_len + 1;
+    pShader->name             = (char8_t*)calloc(1, str_size * sizeof(char8_t));
+    memcpy((void*)pShader->name, pDesc->pName, str_size);
     return pShader;
 }
 
@@ -176,29 +181,119 @@ void GPUFreeShaderLibrary(GPUShaderLibraryID pShader)
     assert(pShader);
     assert(pShader->pDevice);
     assert(pShader->pDevice->pProcTableCache->FreeShaderLibrary);
+    free(pShader->name);
     pShader->pDevice->pProcTableCache->FreeShaderLibrary(pShader);
 }
 
-static const GPUBlendStateDescriptor sDefaulBlendState = {
-    .srcFactors[0] = GPU_BLEND_CONST_ONE,
-    .dstFactors[0] = GPU_BLEND_CONST_ZERO,
-    .srcAlphaFactors[0] = GPU_BLEND_CONST_ONE,
-    .dstAlphaFactors[0] = GPU_BLEND_CONST_ZERO,
-    .blendModes[0] = GPU_BLEND_MODE_ADD,
-    .masks[0] = GPU_COLOR_MASK_ALL,
-    .independentBlend = false
+static const GPUDepthStateDesc sDefaultDepthState = {
+    .depthTest  = false,
+    .depthWrite = false,
+    .stencilTest = false
+};
+
+static const GPURasterizerStateDescriptor sDefaultRasterizerState = {
+    .cullMode = GPU_CULL_MODE_BACK,
+    .fillMode = GPU_FILL_MODE_SOLID,
+    .frontFace = GPU_FRONT_FACE_CCW,
+    .depthBias = 0,
+    .slopeScaledDepthBias = 0.f,
+    .enableMultiSample = false,
+    .enableScissor = false,
+    .enableDepthClamp = false
 };
 
 GPURenderPipelineID GPUCreateRenderPipeline(GPUDeviceID pDevice, const GPURenderPipelineDescriptor* pDesc)
 {
+    static GPUBlendStateDescriptor sDefaulBlendState = {};
+    sDefaulBlendState.srcFactors[0]           = GPU_BLEND_CONST_ONE;
+    sDefaulBlendState.dstFactors[0]           = GPU_BLEND_CONST_ZERO;
+    sDefaulBlendState.srcAlphaFactors[0]      = GPU_BLEND_CONST_ONE;
+    sDefaulBlendState.dstAlphaFactors[0]      = GPU_BLEND_CONST_ZERO;
+    sDefaulBlendState.blendModes[0]           = GPU_BLEND_MODE_ADD;
+    sDefaulBlendState.masks[0]                = GPU_COLOR_MASK_ALL;
+    sDefaulBlendState.independentBlend        = false;
+
     assert(pDevice);
     assert(pDevice->pProcTableCache->CreateRenderPipeline);
     GPURenderPipelineDescriptor newDesc{};
+    memcpy(&newDesc, pDesc, sizeof(GPURenderPipelineDescriptor));
     if (pDesc->samplerCount == 0) newDesc.samplerCount = GPU_SAMPLE_COUNT_1;
     if (pDesc->pBlendState == NULL) newDesc.pBlendState = &sDefaulBlendState;
+    if (pDesc->pDepthState == NULL) newDesc.pDepthState = &sDefaultDepthState;
+    if (pDesc->pRasterizerState == NULL) newDesc.pRasterizerState = &sDefaultRasterizerState;
+    GPURenderPipeline* pPipeline = NULL;
+    pPipeline                    = (GPURenderPipeline*)pDevice->pProcTableCache->CreateRenderPipeline(pDevice, &newDesc);
+    pPipeline->pDevice           = pDevice;
+    pPipeline->pRootSignature    = pDesc->pRootSignature;
+    return pPipeline;
 }
 
 void GPUFreeRenderPipeline(GPURenderPipelineID pPipeline)
 {
+    assert(pPipeline);
+    assert(pPipeline->pDevice->pProcTableCache->FreeRenderPipeline);
+    pPipeline->pDevice->pProcTableCache->FreeRenderPipeline(pPipeline);
+}
 
+GPURootSignatureID GPUCreateRootSignature(GPUDeviceID device, const struct GPURootSignatureDescriptor* desc)
+{
+    GPURootSignature* pRST = (GPURootSignature*)device->pProcTableCache->CreateRootSignature(device, desc);
+    pRST->device           = device;
+    return pRST;
+}
+
+void GPUFreeRootSignature(GPURootSignatureID RS)
+{
+    assert(RS);
+    assert(RS->device);
+    assert(RS->device->pProcTableCache->FreeRootSignature);
+    RS->device->pProcTableCache->FreeRootSignature(RS);
+}
+
+GPUCommandPoolID GPUCreateCommandPool(GPUQueueID queue)
+{
+    assert(queue);
+    assert(queue->pDevice);
+    assert(queue->pDevice->pProcTableCache->CreateCommandPool);
+    GPUCommandPool* P = (GPUCommandPool*)queue->pDevice->pProcTableCache->CreateCommandPool(queue);
+    P->queue          = queue;
+    return P;
+}
+
+void GPUFreeCommandPool(GPUCommandPoolID pool)
+{
+    assert(pool);
+    assert(pool->queue);
+    assert(pool->queue->pDevice);
+    assert(pool->queue->pDevice->pProcTableCache->FreeCommandPool);
+    pool->queue->pDevice->pProcTableCache->FreeCommandPool(pool);
+}
+
+void GPUResetCommandPool(GPUCommandPoolID pool)
+{
+    assert(pool);
+    assert(pool->queue);
+    assert(pool->queue->pDevice);
+    assert(pool->queue->pDevice->pProcTableCache->ResetCommandPool);
+    pool->queue->pDevice->pProcTableCache->ResetCommandPool(pool);
+}
+
+GPUCommandBufferID GPUCreateCommandBuffer(GPUCommandPoolID pool, const GPUCommandBufferDescriptor* desc)
+{
+    assert(pool);
+    assert(pool->queue);
+    assert(pool->queue->pDevice);
+    assert(pool->queue->pDevice->pProcTableCache->CreateCommandBuffer);
+    GPUCommandBuffer* CMD = (GPUCommandBuffer*)pool->queue->pDevice->pProcTableCache->CreateCommandBuffer(pool, desc);
+    CMD->device           = pool->queue->pDevice;
+    CMD->pool             = pool;
+    return CMD;
+}
+
+void GPUFreeCommandBuffer(GPUCommandBufferID cmd)
+{
+    assert(cmd);
+    assert(cmd->device);
+    assert(cmd->device->pProcTableCache->FreeCommandBuffer);
+    cmd->device->pProcTableCache->FreeCommandBuffer(cmd);
 }

@@ -40,12 +40,39 @@ extern "C" {
     void GPUFreeTextureView_Vulkan(GPUTextureViewID pTextureView);
 
     //shader
-    GPUShaderLibraryID GPUCreateShaderLibrary_Vulkan(GPUDeviceID pDevice, GPUShaderLibraryDescriptor* pDesc);
+    GPUShaderLibraryID GPUCreateShaderLibrary_Vulkan(GPUDeviceID pDevice, const GPUShaderLibraryDescriptor* pDesc);
     void GPUFreeShaderLibrary_Vulkan(GPUShaderLibraryID pShader);
 
     //pipeline
     GPURenderPipelineID GPUCreateRenderPipeline_Vulkan(GPUDeviceID pDevice, const GPURenderPipelineDescriptor* pDesc);
     void GPUFreeRenderPipeline_Vulkan(GPURenderPipelineID pPipeline);
+
+    //rootsignature
+    GPURootSignatureID GPUCreateRootSignature_Vulkan(GPUDeviceID device, const struct GPURootSignatureDescriptor* desc);
+    void GPUFreeRootSignature_Vulkan(GPURootSignatureID RS);
+    void CGPUUtil_InitRSParamTables(GPURootSignature* RS, const struct GPURootSignatureDescriptor* desc);
+    void GPUUtil_FreeRSParamTables(GPURootSignature* RS);
+
+    GPUCommandPoolID GPUCreateCommandPool_Vulkan(GPUQueueID queue);
+    VkCommandPool AllocateTransientCommandPool(struct GPUDevice_Vulkan* D, GPUQueueID queue);
+    void GPUFreeCommandPool_Vulkan(GPUCommandPoolID pool);
+    void GPUResetCommandPool_Vulkan(GPUCommandPoolID pool);
+    GPUCommandBufferID GPUCreateCommandBuffer_Vulkan(GPUCommandPoolID pool, const GPUCommandBufferDescriptor* desc);
+    void GPUFreeCommandBuffer_Vulkan(GPUCommandBufferID cmd);
+
+    typedef struct VkUtil_DescriptorPool
+    {
+        struct GPUDevice_Vulkan* Device;
+        VkDescriptorPool pVkDescPool;
+        VkDescriptorPoolCreateFlags mFlags;
+    } VkUtil_DescriptorPool;
+
+    typedef union VkDescriptorUpdateData
+    {
+        VkDescriptorImageInfo mImageInfo;
+        VkDescriptorBufferInfo mBufferInfo;
+        VkBufferView pBuferView;
+    } VkDescriptorUpdateData;
 
 	typedef struct GPUInstance_Vulkan
 	{
@@ -93,7 +120,9 @@ extern "C" {
 	{
         GPUDevice spuer;
         VkDevice pDevice;
+        VkUtil_DescriptorPool* pDescriptorPool;
         struct VolkDeviceTable mVkDeviceTable;
+        struct GPUVkPassTable* pPassTable;
 	} GPUDevice_Vulkan;
 
 	typedef struct GPUQueue_Vulkan
@@ -131,6 +160,7 @@ extern "C" {
     {
         GPUShaderLibrary super;
         VkShaderModule pShader;
+        struct SpvReflectShaderModule* pReflect;
     } GPUShaderLibrary_Vulkan;
 
     typedef struct SetLayout_Vulkan
@@ -170,6 +200,21 @@ extern "C" {
         GPURenderPipeline super;
         VkPipeline pPipeline;
     } GPURenderPipeline_Vulkan;
+
+    typedef struct GPUCommandPool_Vulkan
+    {
+        GPUCommandPool super;
+        VkCommandPool pPool;
+    } GPUCommandPool_Vulkan;
+
+    typedef struct GPUCommandBuffer_Vulkan
+    {
+        GPUCommandBuffer super;
+        VkCommandBuffer pVkCmd;
+        VkPipelineLayout pLayout;
+        VkRenderPass pPass;
+        uint32_t type;
+    } GPUCommandBuffer_Vulkan;
 
 #ifdef __cplusplus
 }

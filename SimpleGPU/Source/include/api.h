@@ -29,6 +29,10 @@ DEFINE_GPU_OBJECT(GPUTextureView)
 DEFINE_GPU_OBJECT(GPUShaderLibrary)
 DEFINE_GPU_OBJECT(GPURootSignature)
 DEFINE_GPU_OBJECT(GPURenderPipeline)
+DEFINE_GPU_OBJECT(GPUSampler)
+DEFINE_GPU_OBJECT(GPURootSignaturePool)
+DEFINE_GPU_OBJECT(GPUCommandPool)
+DEFINE_GPU_OBJECT(GPUCommandBuffer)
 
 #ifdef __cplusplus
 extern "C" {
@@ -111,9 +115,13 @@ extern "C" {
         GPU_SHADER_STAGE_FRAG       = 0X00000010,
         GPU_SHADER_STAGE_COMPUTE    = 0X00000020,
         GPU_SHADER_STAGE_RAYTRACING = 0X00000040,
+        GPU_SHADER_STAGE_ALL_GRAPHICS = (uint32_t)GPU_SHADER_STAGE_VERT | (uint32_t)GPU_SHADER_STAGE_TESC | (uint32_t)GPU_SHADER_STAGE_TESE | (uint32_t)GPU_SHADER_STAGE_GEOM | (uint32_t)GPU_SHADER_STAGE_FRAG,
+        GPU_SHADER_STAGE_HULL         = GPU_SHADER_STAGE_TESC,
+        GPU_SHADER_STAGE_DOMAIN       = GPU_SHADER_STAGE_TESE,
         GPU_SHADER_STAGE_COUNT        = 6,
         GPU_SHADER_STAGE_MAX_ENUM_BIT = 0x7FFFFFFF
     } EGPUShaderStage;
+    typedef uint32_t GPUShaderStages;
 
     typedef enum EGPUVertexInputRate
     {
@@ -235,6 +243,16 @@ extern "C" {
         GPU_STORE_ACTION_MAX_ENUM_BIT = 0x7FFFFFFF
     } EGPUStoreAction;
 
+    typedef enum EGPUPipelineType
+    {
+        GPU_PIPELINE_TYPE_NONE = 0,
+        GPU_PIPELINE_TYPE_COMPUTE,
+        GPU_PIPELINE_TYPE_GRAPHICS,
+        GPU_PIPELINE_TYPE_RAYTRACING,
+        GPU_PIPELINE_TYPE_COUNT,
+        GPU_PIPELINE_TYPE_MAX_ENUM_BIT = 0x7FFFFFFF
+    } EGPUPipelineType;
+
 	//instance api
 	GPUInstanceID GPUCreateInstance(const struct GPUInstanceDescriptor* pDesc);
 	typedef GPUInstanceID (*GPUProcCreateInstance)(const struct GPUInstanceDescriptor* pDesc);
@@ -285,8 +303,8 @@ extern "C" {
     typedef void (*GPUProcFreeTextureView)(GPUTextureViewID pTextureView);
 
     //shader api
-    GPUShaderLibraryID GPUCreateShaderLibrary(GPUDeviceID pDevice, GPUShaderLibraryDescriptor* pDesc);
-    typedef GPUShaderLibraryID (*GPUProcCreateShaderLibrary)(GPUDeviceID pDevice, GPUShaderLibraryDescriptor* pDesc);
+    GPUShaderLibraryID GPUCreateShaderLibrary(GPUDeviceID pDevice, const GPUShaderLibraryDescriptor* pDesc);
+    typedef GPUShaderLibraryID (*GPUProcCreateShaderLibrary)(GPUDeviceID pDevice, const GPUShaderLibraryDescriptor* pDesc);
     void GPUFreeShaderLibrary(GPUShaderLibraryID pShader);
     typedef void (*GPUProcFreeShaderLibrary)(GPUShaderLibraryID pShader);
 
@@ -295,6 +313,22 @@ extern "C" {
     typedef GPURenderPipelineID (*GPUProcCreateRenderPipeline)(GPUDeviceID pDevice, const GPURenderPipelineDescriptor* pDesc);
     void GPUFreeRenderPipeline(GPURenderPipelineID pPipeline);
     typedef void (*GPUProcFreeRenderPipeline)(GPURenderPipelineID pPipeline);
+
+    GPURootSignatureID GPUCreateRootSignature(GPUDeviceID device, const struct GPURootSignatureDescriptor* desc);
+    typedef GPURootSignatureID (*GPUProcCreateRootSignature)(GPUDeviceID device, const struct GPURootSignatureDescriptor* desc);
+    void GPUFreeRootSignature(GPURootSignatureID RS);
+    typedef void (*GPUProcFreeRootSignature)(GPURootSignatureID RS);
+
+    GPUCommandPoolID GPUCreateCommandPool(GPUQueueID queue);
+    typedef GPUCommandPoolID (*GPUProcCreateCommandPool)(GPUQueueID queue);
+    void GPUFreeCommandPool(GPUCommandPoolID pool);
+    typedef void (*GPUProcFreeCommandPool)(GPUCommandPoolID pool);
+    void GPUResetCommandPool(GPUCommandPoolID pool);
+    typedef void (*GPUProcResetCommandPool)(GPUCommandPoolID pool);
+    GPUCommandBufferID GPUCreateCommandBuffer(GPUCommandPoolID pool, const GPUCommandBufferDescriptor* desc);
+    typedef GPUCommandBufferID (*GPUProcCreateCommandBuffer)(GPUCommandPoolID pool, const GPUCommandBufferDescriptor* desc);
+    void GPUFreeCommandBuffer(GPUCommandBufferID cmd);
+    typedef void (*GPUProcFreeCommandBuffer)(GPUCommandBufferID cmd);
 
 	typedef struct GPUProcTable
 	{
@@ -325,6 +359,15 @@ extern "C" {
         //pipeline
         const GPUProcCreateRenderPipeline CreateRenderPipeline;
         const GPUProcFreeRenderPipeline FreeRenderPipeline;
+
+        const GPUProcCreateRootSignature CreateRootSignature;
+        const GPUProcFreeRootSignature FreeRootSignature;
+
+        const GPUProcCreateCommandPool CreateCommandPool;
+        const GPUProcFreeCommandPool FreeCommandPool;
+        const GPUProcResetCommandPool ResetCommandPool;
+        const GPUProcCreateCommandBuffer CreateCommandBuffer;
+        const GPUProcFreeCommandBuffer FreeCommandBuffer;
 	}GPUProcTable;
 
 	typedef struct CGPUChainedDescriptor {
@@ -403,6 +446,22 @@ extern "C" {
         uint32_t backBuffersCount;
 	} GPUSwapchain;
 
+    typedef enum EGPUTextureDimension
+    {
+        GPU_TEX_DIMENSION_1D,
+        GPU_TEX_DIMENSION_2D,
+        GPU_TEX_DIMENSION_2DMS,
+        GPU_TEX_DIMENSION_3D,
+        GPU_TEX_DIMENSION_CUBE,
+        GPU_TEX_DIMENSION_1D_ARRAY,
+        GPU_TEX_DIMENSION_2D_ARRAY,
+        GPU_TEX_DIMENSION_2DMS_ARRAY,
+        GPU_TEX_DIMENSION_CUBE_ARRAY,
+        GPU_TEX_DIMENSION_COUNT,
+        GPU_TEX_DIMENSION_UNDEFINED,
+        GPU_TEX_DIMENSION_MAX_ENUM_BIT = 0x7FFFFFFF
+    } EGPUTextureDimension;
+
 	typedef struct GPUTexture
 	{
         GPUDeviceID pDevice;
@@ -455,26 +514,93 @@ extern "C" {
         const uint32_t* code;
         uint32_t codeSize;
         EGPUShaderStage stage;
-        //bool reflection_only;
+        bool reflectionOnly;
     } GPUShaderLibraryDescriptor;
+
+    // Shaders
+    typedef enum EGPUResourceType
+    {
+        GPU_RESOURCE_TYPE_NONE    = 0,
+        GPU_RESOURCE_TYPE_SAMPLER = 0x00000001,
+        // SRV Read only texture
+        GPU_RESOURCE_TYPE_TEXTURE = (GPU_RESOURCE_TYPE_SAMPLER << 1),
+        /// RTV Texture
+        GPU_RESOURCE_TYPE_RENDER_TARGET = (GPU_RESOURCE_TYPE_TEXTURE << 1),
+        /// DSV Texture
+        GPU_RESOURCE_TYPE_DEPTH_STENCIL = (GPU_RESOURCE_TYPE_RENDER_TARGET << 1),
+        /// UAV Texture
+        GPU_RESOURCE_TYPE_RW_TEXTURE = (GPU_RESOURCE_TYPE_DEPTH_STENCIL << 1),
+        // SRV Read only buffer
+        GPU_RESOURCE_TYPE_BUFFER     = (GPU_RESOURCE_TYPE_RW_TEXTURE << 1),
+        GPU_RESOURCE_TYPE_BUFFER_RAW = (GPU_RESOURCE_TYPE_BUFFER | (GPU_RESOURCE_TYPE_BUFFER << 1)),
+        /// UAV Buffer
+        GPU_RESOURCE_TYPE_RW_BUFFER     = (GPU_RESOURCE_TYPE_BUFFER << 2),
+        GPU_RESOURCE_TYPE_RW_BUFFER_RAW = (GPU_RESOURCE_TYPE_RW_BUFFER | (GPU_RESOURCE_TYPE_RW_BUFFER << 1)),
+        /// CBV Uniform buffer
+        GPU_RESOURCE_TYPE_UNIFORM_BUFFER = (GPU_RESOURCE_TYPE_RW_BUFFER << 2),
+        /// Push constant / Root constant
+        GPU_RESOURCE_TYPE_PUSH_CONSTANT = (GPU_RESOURCE_TYPE_UNIFORM_BUFFER << 1),
+        /// IA
+        GPU_RESOURCE_TYPE_VERTEX_BUFFER   = (GPU_RESOURCE_TYPE_PUSH_CONSTANT << 1),
+        GPU_RESOURCE_TYPE_INDEX_BUFFER    = (GPU_RESOURCE_TYPE_VERTEX_BUFFER << 1),
+        GPU_RESOURCE_TYPE_INDIRECT_BUFFER = (GPU_RESOURCE_TYPE_INDEX_BUFFER << 1),
+        /// Cubemap SRV
+        GPU_RESOURCE_TYPE_TEXTURE_CUBE = (GPU_RESOURCE_TYPE_TEXTURE | (GPU_RESOURCE_TYPE_INDIRECT_BUFFER << 1)),
+        /// RTV / DSV per mip slice
+        GPU_RESOURCE_TYPE_RENDER_TARGET_MIP_SLICES = (GPU_RESOURCE_TYPE_INDIRECT_BUFFER << 2),
+        /// RTV / DSV per array slice
+        GPU_RESOURCE_TYPE_RENDER_TARGET_ARRAY_SLICES = (GPU_RESOURCE_TYPE_RENDER_TARGET_MIP_SLICES << 1),
+        /// RTV / DSV per depth slice
+        GPU_RESOURCE_TYPE_RENDER_TARGET_DEPTH_SLICES = (GPU_RESOURCE_TYPE_RENDER_TARGET_ARRAY_SLICES << 1),
+        GPU_RESOURCE_TYPE_RAY_TRACING                = (GPU_RESOURCE_TYPE_RENDER_TARGET_DEPTH_SLICES << 1),
+#if defined(GPU_USE_VULKAN)
+        /// Subpass input (descriptor type only available in Vulkan)
+        GPU_RESOURCE_TYPE_INPUT_ATTACHMENT       = (GPU_RESOURCE_TYPE_RAY_TRACING << 1),
+        GPU_RESOURCE_TYPE_TEXEL_BUFFER           = (GPU_RESOURCE_TYPE_INPUT_ATTACHMENT << 1),
+        GPU_RESOURCE_TYPE_RW_TEXEL_BUFFER        = (GPU_RESOURCE_TYPE_TEXEL_BUFFER << 1),
+        GPU_RESOURCE_TYPE_COMBINED_IMAGE_SAMPLER = (GPU_RESOURCE_TYPE_RW_TEXEL_BUFFER << 1),
+#endif
+        GPU_RESOURCE_TYPE_MAX_ENUM_BIT = 0x7FFFFFFF
+    } EGPUResourceType;
+    typedef uint32_t GPUResourceTypes;
+
+    typedef struct GPUShaderResource
+    {
+        const char8_t* name;
+        uint64_t name_hash;
+        EGPUResourceType type;
+        EGPUTextureDimension dim;
+        uint32_t set;
+        uint32_t binding;
+        uint32_t size;
+        uint32_t offset;
+        GPUShaderStages stages;
+    } CGPUShaderResource;
+
+    typedef struct GPUVertexInput
+    {
+        const char8_t* name;
+        const char8_t* semantics;
+        EGPUFormat format;
+    } GPUVertexInput;
 
     typedef struct GPUShaderReflection
     {
-        /*const char8_t* entry_name;
-        ECGPUShaderStage stage;
-        CGPUVertexInput* vertex_inputs;
-        CGPUShaderResource* shader_resources;
+        const char8_t* entry_name;
+        EGPUShaderStage stage;
+        GPUVertexInput* vertex_inputs;
+        GPUShaderResource* shader_resources;
         uint32_t vertex_inputs_count;
         uint32_t shader_resources_count;
-        uint32_t thread_group_sizes[3];*/
+        uint32_t thread_group_sizes[3];
     } GPUShaderReflection;
 
     typedef struct GPUShaderLibrary
     {
         GPUDeviceID pDevice;
-       /* char8_t* name;
+        char8_t* name;
         GPUShaderReflection* entry_reflections;
-        uint32_t entrys_count;*/
+        uint32_t entrys_count;
     } CGPUShaderLibrary;
 
     typedef struct GPUShaderEntryDescriptor
@@ -504,9 +630,50 @@ extern "C" {
         GPUVertexAttribute attributes[GPU_MAX_VERTEX_ATTRIBS];
     } GPUVertexLayout;
 
+    typedef struct GPURootSignatureDescriptor
+    {
+        struct GPUShaderEntryDescriptor* shaders;
+        uint32_t shader_count;
+        const GPUSamplerID* static_samplers;
+        const char8_t* const* static_sampler_names;
+        uint32_t static_sampler_count;
+        const char8_t* const* push_constant_names;
+        uint32_t push_constant_count;
+        GPURootSignaturePoolID pool;
+
+    } GPURootSignatureDescriptor;
+
+    typedef struct GPUSampler
+    {
+        GPUDeviceID device;
+    } GPUSampler;
+
+    typedef struct GPURootSignaturePool
+    {
+        GPUDeviceID device;
+        EGPUPipelineType pipeline_type;
+    } GPURootSignaturePool;
+
+    typedef struct GPUParameterTable
+    {
+        // This should be stored here because shader could be destoryed after RS creation
+        GPUShaderResource* resources;
+        uint32_t resources_count;
+        uint32_t set_index;
+    } GPUParameterTable;
+
     typedef struct GPURootSignature
     {
-
+        GPUDeviceID device;
+        GPUParameterTable* tables;
+        uint32_t table_count;
+        CGPUShaderResource* push_constants;
+        uint32_t push_constant_count;
+        CGPUShaderResource* static_samplers;
+        uint32_t static_sampler_count;
+        EGPUPipelineType pipeline_type;
+        GPURootSignaturePoolID pool;
+        GPURootSignatureID pool_sig;
     } GPURootSignature;
 
     typedef struct GPUDepthStateDesc
@@ -530,10 +697,10 @@ extern "C" {
     typedef struct GPURasterizerStateDescriptor
     {
         EGPUCullMode cullMode;
-        int32_t depthBias;
-        float slopeScaledDepthBias;
         EGPUFillMode fillMode;
         EGPUFrontFace frontFace;
+        int32_t depthBias;
+        float slopeScaledDepthBias;
         bool enableMultiSample;
         bool enableScissor;
         bool enableDepthClamp;
@@ -584,6 +751,24 @@ extern "C" {
         GPUDeviceID pDevice;
         GPURootSignatureID pRootSignature;
     } GPURenderPipeline;
+
+    typedef struct GPUCommandPool
+    {
+        GPUQueueID queue;
+    } GPUCommandPool;
+
+    typedef struct GPUCommandBufferDescriptor
+    {
+        bool isSecondary : 1;
+    } GPUCommandBufferDescriptor;
+
+
+    typedef struct GPUCommandBuffer
+    {
+        GPUDeviceID device;
+        GPUCommandPoolID pool;
+        EGPUPipelineType currentDispatch;
+    } GPUCommandBuffer;
 
 #ifdef __cplusplus
 }

@@ -131,10 +131,6 @@ int main(int argc, char** argv)
 
         ppSwapchainImage[i] = GPUCreateTextureView(device, &desc);
     }
-    for (uint32_t i = 0; i < 3; i++)
-    {
-        GPUFreeTextureView(ppSwapchainImage[i]);
-    }
     //shader
     uint32_t* vShaderCode;
     uint32_t vSize = 0;
@@ -143,18 +139,57 @@ int main(int argc, char** argv)
     uint32_t fSize = 0;
     ReadShaderBytes(u8"fragment_shader.frag", &fShaderCode, &fSize, EGPUBackend::GPUBackend_Vulkan);
     GPUShaderLibraryDescriptor vShaderDesc{};
+    vShaderDesc.pName    = u8"vertex_shader";
     vShaderDesc.code = vShaderCode;
     vShaderDesc.codeSize = vSize;
+    vShaderDesc.stage    = GPU_SHADER_STAGE_VERT;
     GPUShaderLibraryDescriptor fShaderDesc{};
+    fShaderDesc.pName    = u8"fragment_shader";
     fShaderDesc.code     = fShaderCode;
     fShaderDesc.codeSize = fSize;
+    fShaderDesc.stage    = GPU_SHADER_STAGE_FRAG;
     GPUShaderLibraryID pVShader = GPUCreateShaderLibrary(device, &vShaderDesc);
     GPUShaderLibraryID pFShader = GPUCreateShaderLibrary(device, &fShaderDesc);
     free(vShaderCode);
     free(fShaderCode);
+
+    GPUShaderEntryDescriptor shaderEntries[2] = {0};
+    shaderEntries[0].stage                    = GPU_SHADER_STAGE_VERT;
+    shaderEntries[0].entry                    = u8"main";
+    shaderEntries[0].pLibrary                 = pVShader;
+    shaderEntries[1].stage                    = GPU_SHADER_STAGE_FRAG;
+    shaderEntries[1].entry                    = u8"main";
+    shaderEntries[1].pLibrary                 = pFShader;
+    GPURootSignatureDescriptor rootRSDesc     = {};
+    rootRSDesc.shaders                        = shaderEntries;
+    rootRSDesc.shader_count                   = 2;
+    GPURootSignatureID pRS                    = GPUCreateRootSignature(device, &rootRSDesc);
+    GPUVertexLayout vertexLayout{};
+    GPURenderPipelineDescriptor pipelineDesc{};
+    pipelineDesc.pRootSignature    = pRS;
+    pipelineDesc.pVertexShader     = &shaderEntries[0];
+    pipelineDesc.pFragmentShader   = &shaderEntries[1];
+    pipelineDesc.pVertexLayout     = &vertexLayout;
+    pipelineDesc.primitiveTopology = GPU_PRIM_TOPO_TRI_LIST;
+    pipelineDesc.pColorFormats     = const_cast<EGPUFormat*>(&ppSwapchainImage[0]->desc.format);
+    pipelineDesc.renderTargetCount = 1;
+    GPURenderPipelineID pipeline   = GPUCreateRenderPipeline(device, &pipelineDesc);
     GPUFreeShaderLibrary(pVShader);
     GPUFreeShaderLibrary(pFShader);
 
+    GPUCommandPoolID pool = GPUCreateCommandPool(pGraphicQueue);
+    GPUCommandBufferDescriptor cmdDesc{};
+    cmdDesc.isSecondary = false;
+    GPUCommandBufferID cmd = GPUCreateCommandBuffer(pool, &cmdDesc);
+
+    for (uint32_t i = 0; i < pSwapchain->backBuffersCount; i++)
+    {
+        GPUFreeTextureView(ppSwapchainImage[i]);
+    }
+    GPUFreeCommandBuffer(cmd);
+    GPUFreeCommandPool(pool);
+    GPUFreeRenderPipeline(pipeline);
+    GPUFreeRootSignature(pRS);
     GPUFreeSwapchain(pSwapchain);
     GPUFreeDevice(device);
     GPUFreeSurface(pInstance, pSurface);

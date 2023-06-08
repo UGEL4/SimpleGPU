@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <vector>
 #include <algorithm>
+#include <unordered_map>
 #include "GPUVulkanEXTs.h"
 #include "backend/vulkan/GPUVulkanUtils.h"
 
@@ -66,12 +67,86 @@ const GPUProcTable vkTable = {
     .CreateShaderLibrary  = &GPUCreateShaderLibrary_Vulkan,
     .FreeShaderLibrary    = &GPUFreeShaderLibrary_Vulkan,
     .CreateRenderPipeline = &GPUCreateRenderPipeline_Vulkan,
-    .FreeRenderPipeline   = &GPUFreeRenderPipeline_Vulkan
+    .FreeRenderPipeline   = &GPUFreeRenderPipeline_Vulkan,
+    .CreateRootSignature  = &GPUCreateRootSignature_Vulkan,
+    .FreeRootSignature    = &GPUFreeRootSignature_Vulkan,
+    .CreateCommandPool    = &GPUCreateCommandPool_Vulkan,
+    .FreeCommandPool      = &GPUFreeCommandPool_Vulkan,
+    .ResetCommandPool     = &GPUResetCommandPool_Vulkan,
+    .CreateCommandBuffer  = &GPUCreateCommandBuffer_Vulkan,
+    .FreeCommandBuffer    = &GPUFreeCommandBuffer_Vulkan
 };
 const GPUProcTable* GPUVulkanProcTable()
 {
     return &vkTable;
 }
+
+struct GPUCachedRenderPass
+{
+    VkRenderPass pPass;
+    size_t timestamp;
+};
+
+struct VulkanRenderPassDescriptorHasher {
+    size_t operator()(const VulkanRenderPassDescriptor& a) const
+    {
+        return hash_val(&a);
+    }
+
+    template <typename... types>
+    size_t hash_val(const types&... args) const
+    {
+        size_t seed = 0;
+        hash_val(seed, args...);
+        return seed;
+    }
+
+    template <typename T, typename... types>
+    void hash_val(size_t& seed, const T& firstArg, const types&... args) const
+    {
+        hash_combine(seed, firstArg);
+        hash_val(seed, args...);
+    }
+
+    template <typename T>
+    void hash_val(size_t& seed, const T& val) const
+    {
+        hash_combine(seed, val);
+    }
+
+    template <typename T>
+    void hash_combine(size_t& seed, const T& val) const
+    {
+        seed ^= std::hash<T>()(val) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+    }
+};
+
+bool operator==(const VulkanRenderPassDescriptor& a, const VulkanRenderPassDescriptor& b)
+{
+    if (a.attachmentCount != b.attachmentCount) return false;
+    return std::memcmp(&a, &b, sizeof(VulkanRenderPassDescriptor)) == 0;
+}
+
+struct GPUVkPassTable
+{
+    /*struct fbdesc_hash {
+        size_t operator()(const VkUtil_FramebufferDesc& a) const
+        {
+            return cgpu_hash(&a, sizeof(VkUtil_FramebufferDesc), CGPU_NAME_HASH_SEED);
+        }
+    };
+    struct fbdesc_eq {
+        inline bool operator()(const VkUtil_FramebufferDesc& a, const VkUtil_FramebufferDesc& b) const
+        {
+            if (a.pRenderPass != b.pRenderPass) return false;
+            if (a.mAttachmentCount != b.mAttachmentCount) return false;
+            return std::memcmp(&a, &b, sizeof(VkUtil_RenderPassDesc)) == 0;
+        }
+    };*/
+
+    std::unordered_map<VulkanRenderPassDescriptor, GPUCachedRenderPass, VulkanRenderPassDescriptorHasher> cached_renderpasses;
+    //skr::flat_hash_map<VkUtil_FramebufferDesc, CGPUCachedFramebuffer, fbdesc_hash, fbdesc_eq> cached_framebuffers;
+};
 
 GPUInstanceID CreateInstance_Vulkan(const GPUInstanceDescriptor* pDesc)
 {
@@ -263,14 +338,64 @@ GPUDeviceID CreateDevice_Vulkan(GPUAdapterID pAdapter, const GPUDeviceDescriptor
 
     // pipeline cache
 
+    //descriptor pool
+    pDevice->pDescriptorPool = (VkUtil_DescriptorPool*)malloc(sizeof(VkUtil_DescriptorPool));
+    memset(pDevice->pDescriptorPool, 0, sizeof(VkUtil_DescriptorPool));
+    VkDescriptorPoolCreateInfo poolInfo{};
+    poolInfo.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolInfo.flags         = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+    poolInfo.poolSizeCount = GPU_VK_DESCRIPTOR_TYPE_RANGE_SIZE;
+    poolInfo.pPoolSizes    = gDescriptorPoolSizes;
+    poolInfo.maxSets       = 8192;
+    result = pDevice->mVkDeviceTable.vkCreateDescriptorPool(pDevice->pDevice, &poolInfo, GLOBAL_VkAllocationCallbacks, &pDevice->pDescriptorPool->pVkDescPool);
+    assert(result == VK_SUCCESS);
+    pDevice->pDescriptorPool->Device = pDevice;
+    pDevice->pDescriptorPool->mFlags = poolInfo.flags;
+
+    //pass table
+    void* ptr           = calloc(1, sizeof(GPUVkPassTable));
+    pDevice->pPassTable = new (ptr) GPUVkPassTable();
+
     return &(pDevice->spuer);
 }
 
 void FreeDevice_Vulkan(GPUDeviceID pDevice)
 {
     GPUDevice_Vulkan* pVkDevice = (GPUDevice_Vulkan*)pDevice;
+
+    for (auto& iter : pVkDevice->pPassTable->cached_renderpasses)
+    {
+        pVkDevice->mVkDeviceTable.vkDestroyRenderPass(pVkDevice->pDevice, iter.second.pPass, GLOBAL_VkAllocationCallbacks);
+    }
+
+    pVkDevice->mVkDeviceTable.vkDestroyDescriptorPool(pVkDevice->pDevice, pVkDevice->pDescriptorPool->pVkDescPool, GLOBAL_VkAllocationCallbacks);
     vkDestroyDevice(pVkDevice->pDevice, GLOBAL_VkAllocationCallbacks);
+    GPU_SAFE_FREE(pVkDevice->pPassTable);
+    GPU_SAFE_FREE(pVkDevice->pDescriptorPool);
     GPU_SAFE_FREE(pVkDevice);
+}
+
+VkRenderPass VulkanUtil_RenderPassTableTryFind(struct GPUVkPassTable* table, const struct VulkanRenderPassDescriptor* desc)
+{
+    auto iter = table->cached_renderpasses.find(*desc);
+    if (iter != table->cached_renderpasses.end())
+    {
+        //
+        return iter->second.pPass;
+    }
+    return VK_NULL_HANDLE;
+}
+
+void VulkanUtil_RenderPassTableAdd(struct GPUVkPassTable* table, const struct VulkanRenderPassDescriptor* desc, VkRenderPass pass)
+{
+    const auto& iter = table->cached_renderpasses.find(*desc);
+    if (iter != table->cached_renderpasses.end())
+    {
+       //"Vulkan Pass with this desc already exists!";
+    }
+    // TODO: Add timestamp
+    GPUCachedRenderPass new_pass      = { pass, 0 };
+    table->cached_renderpasses[*desc] = new_pass;
 }
 
 uint32_t QueryQueueCount_Vulkan(const GPUAdapterID pAdapter, const EGPUQueueType queueType)
@@ -711,7 +836,7 @@ void GPUFreeTextureView_Vulkan(GPUTextureViewID pTextureView)
     _aligned_free(pView);
 }
 
-GPUShaderLibraryID GPUCreateShaderLibrary_Vulkan(GPUDeviceID pDevice, GPUShaderLibraryDescriptor* pDesc)
+GPUShaderLibraryID GPUCreateShaderLibrary_Vulkan(GPUDeviceID pDevice, const GPUShaderLibraryDescriptor* pDesc)
 {
     GPUDevice_Vulkan* pVkDevice = (GPUDevice_Vulkan*)pDevice;
 
@@ -720,12 +845,15 @@ GPUShaderLibraryID GPUCreateShaderLibrary_Vulkan(GPUDeviceID pDevice, GPUShaderL
     info.codeSize = pDesc->codeSize;
     info.pCode    = pDesc->code;
 
-    GPUShaderLibrary_Vulkan* pShader = (GPUShaderLibrary_Vulkan*)malloc(sizeof(GPUShaderLibrary_Vulkan));
-    if (pVkDevice->mVkDeviceTable.vkCreateShaderModule(pVkDevice->pDevice, &info, GLOBAL_VkAllocationCallbacks, &pShader->pShader) != VK_SUCCESS)
+    GPUShaderLibrary_Vulkan* pShader = (GPUShaderLibrary_Vulkan*)calloc(1, sizeof(GPUShaderLibrary_Vulkan));
+    if (!pDesc->reflectionOnly)
     {
-        assert(0);
+        if (pVkDevice->mVkDeviceTable.vkCreateShaderModule(pVkDevice->pDevice, &info, GLOBAL_VkAllocationCallbacks, &pShader->pShader) != VK_SUCCESS)
+        {
+            assert(0);
+        }
     }
-
+    VulkanUtil_InitializeShaderReflection(pDevice, pShader, pDesc);
     return &pShader->super;
 }
 
@@ -733,55 +861,67 @@ void GPUFreeShaderLibrary_Vulkan(GPUShaderLibraryID pShader)
 {
     GPUShaderLibrary_Vulkan* pVkShader = (GPUShaderLibrary_Vulkan*)pShader;
     GPUDevice_Vulkan* pVkDevice        = (GPUDevice_Vulkan*)pShader->pDevice;
+    VulkanUtil_FreeShaderReflection(pVkShader);
     pVkDevice->mVkDeviceTable.vkDestroyShaderModule(pVkDevice->pDevice, pVkShader->pShader, GLOBAL_VkAllocationCallbacks);
     GPU_SAFE_FREE(pVkShader);
 }
 
 static void CreateRenderPass(const GPUDevice_Vulkan* pDevice, const VulkanRenderPassDescriptor* pDesc, VkRenderPass* pVkPass)
 {
+    VkRenderPass found = VulkanUtil_RenderPassTableTryFind(pDevice->pPassTable, pDesc);
+    if (found != VK_NULL_HANDLE)
+    {
+        *pVkPass = found;
+        return;
+    }
     uint32_t attachmentCount                                     = pDesc->attachmentCount;
     uint32_t depthCount                                          = (pDesc->depthFormat == GPU_FORMAT_UNDEFINED) ? 0 : 1;
     VkAttachmentDescription attachments[GPU_MAX_MRT_COUNT + 1]   = { 0 };
     VkAttachmentReference colorAttachmentRefs[GPU_MAX_MRT_COUNT] = { 0 };
     VkAttachmentReference depthStencilAttachmentRef[1]           = { 0 };
 
+    uint32_t idx = 0;
     for (uint32_t i = 0; i < attachmentCount; i++)
     {
-        attachments[i].format        = GPUFormatToVulkanFormat(pDesc->pColorFormat[i]);
-        attachments[i].samples       = VulkanUtil_SampleCountToVk(pDesc->sampleCount);
-        attachments[i].loadOp        = gVkAttachmentLoadOpTranslator[pDesc->pColorLoadOps[i]];
-        attachments[i].storeOp       = gVkAttachmentStoreOpTranslator[pDesc->pColorStoreOps[i]];
-        attachments[i].initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        attachments[i].finalLayout   = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        attachments[idx].format        = GPUFormatToVulkanFormat(pDesc->pColorFormat[i]);
+        attachments[idx].samples       = VulkanUtil_SampleCountToVk(pDesc->sampleCount);
+        attachments[idx].loadOp        = gVkAttachmentLoadOpTranslator[pDesc->pColorLoadOps[i]];
+        attachments[idx].storeOp       = gVkAttachmentStoreOpTranslator[pDesc->pColorStoreOps[i]];
+        attachments[idx].initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        attachments[idx].finalLayout   = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         // color references
-        colorAttachmentRefs[i].attachment = i;
-        colorAttachmentRefs[i].layout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        colorAttachmentRefs[idx].attachment = idx;
+        colorAttachmentRefs[idx].layout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        idx++;
     }
 
     if (depthCount > 0)
     {
-        attachments[attachmentCount].format         = GPUFormatToVulkanFormat(pDesc->depthFormat);
-        attachments[attachmentCount].samples        = VulkanUtil_SampleCountToVk(pDesc->sampleCount);
-        attachments[attachmentCount].loadOp         = gVkAttachmentLoadOpTranslator[pDesc->depthLoadOp];
-        attachments[attachmentCount].storeOp        = gVkAttachmentStoreOpTranslator[pDesc->depthStoreOp];
-        attachments[attachmentCount].stencilLoadOp  = gVkAttachmentLoadOpTranslator[pDesc->stencilLoadOp];
-        attachments[attachmentCount].stencilStoreOp = gVkAttachmentStoreOpTranslator[pDesc->stencilStoreOp];
-        attachments[attachmentCount].initialLayout  = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-        attachments[attachmentCount].finalLayout    = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        attachments[idx].format         = GPUFormatToVulkanFormat(pDesc->depthFormat);
+        attachments[idx].samples        = VulkanUtil_SampleCountToVk(pDesc->sampleCount);
+        attachments[idx].loadOp         = gVkAttachmentLoadOpTranslator[pDesc->depthLoadOp];
+        attachments[idx].storeOp        = gVkAttachmentStoreOpTranslator[pDesc->depthStoreOp];
+        attachments[idx].stencilLoadOp  = gVkAttachmentLoadOpTranslator[pDesc->stencilLoadOp];
+        attachments[idx].stencilStoreOp = gVkAttachmentStoreOpTranslator[pDesc->stencilStoreOp];
+        attachments[idx].initialLayout  = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        attachments[idx].finalLayout    = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         // depth reference
-        depthStencilAttachmentRef[0].attachment = attachmentCount;
+        depthStencilAttachmentRef[0].attachment = idx;
         depthStencilAttachmentRef[0].layout     = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        idx++;
     }
 
+    uint32_t _attachmentCount = attachmentCount;
+    _attachmentCount += depthCount;
     VkSubpassDescription subPass{};
     subPass.pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subPass.colorAttachmentCount    = attachmentCount;
+    subPass.colorAttachmentCount    = _attachmentCount;
     subPass.pColorAttachments       = colorAttachmentRefs;
     subPass.pDepthStencilAttachment = (depthCount > 0) ? depthStencilAttachmentRef : VK_NULL_HANDLE;
 
     VkRenderPassCreateInfo createInfo{};
     createInfo.sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    createInfo.attachmentCount = pDesc->attachmentCount + 1; // color attachment + depth attachment
+    createInfo.attachmentCount = _attachmentCount; // color attachment + depth attachment
     createInfo.pAttachments    = attachments;
     createInfo.subpassCount    = 1;
     createInfo.pSubpasses      = &subPass;
@@ -790,6 +930,7 @@ static void CreateRenderPass(const GPUDevice_Vulkan* pDevice, const VulkanRender
 
     VkResult rs = pDevice->mVkDeviceTable.vkCreateRenderPass(pDevice->pDevice, &createInfo, GLOBAL_VkAllocationCallbacks, pVkPass);
     assert(rs == VK_SUCCESS);
+    VulkanUtil_RenderPassTableAdd(pDevice->pPassTable, pDesc, *pVkPass);
 }
 
 GPURenderPipelineID GPUCreateRenderPipeline_Vulkan(GPUDeviceID pDevice, const GPURenderPipelineDescriptor* pDesc)
@@ -892,7 +1033,7 @@ GPURenderPipelineID GPUCreateRenderPipeline_Vulkan(GPUDeviceID pDevice, const GP
     };
     VkPipelineDynamicStateCreateInfo dyInfo {};
     dyInfo.sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-    dyInfo.dynamicStateCount = sizeof(dyn_states) / sizeof(VkPipelineDynamicStateCreateInfo);
+    dyInfo.dynamicStateCount = sizeof(dyn_states) / sizeof(VkDynamicState);
     dyInfo.pDynamicStates    = dyn_states;
 
     // Multi-sampling
@@ -1029,4 +1170,568 @@ void GPUFreeRenderPipeline_Vulkan(GPURenderPipelineID pPipeline)
 
     pVkDevice->mVkDeviceTable.vkDestroyPipeline(pVkDevice->pDevice, pVkRpr->pPipeline, GLOBAL_VkAllocationCallbacks);
     GPU_SAFE_FREE(pVkRpr);
+}
+
+GPURootSignatureID GPUCreateRootSignature_Vulkan(GPUDeviceID device, const struct GPURootSignatureDescriptor* desc)
+{
+    const GPUDevice_Vulkan* D   = (GPUDevice_Vulkan*)device;
+    GPURootSignature_Vulkan* RS = (GPURootSignature_Vulkan*)malloc(sizeof(GPURootSignature_Vulkan));
+    memset(RS, 0, sizeof(GPURootSignature_Vulkan));
+    CGPUUtil_InitRSParamTables((GPURootSignature*)RS, desc);
+    // [RS POOL] ALLOCATION
+    if (desc->pool)
+    {
+        /*GPURootSignature_Vulkan* poolSig =
+        (GPURootSignature_Vulkan*)GPUUtil_TryAllocateSignature(desc->pool, &RS->super, desc);
+        if (poolSig != VK_NULL_HANDLE)
+        {
+            RS->pPipelineLayout  = poolSig->pPipelineLayout;
+            RS->pSetLayouts      = poolSig->pSetLayouts;
+            RS->setLayoutsCount  = poolSig->setLayoutsCount;
+            RS->pPushConstantRanges = poolSig->pPushConstantRanges;
+            RS->super.pool       = desc->pool;
+            RS->super.pool_sig   = &poolSig->super;
+            return &RS->super;
+        }*/
+    }
+    // [RS POOL] END ALLOCATION
+    // set index mask. set(0, 1, 2, 3) -> 0000...1111
+    uint32_t set_index_mask = 0;
+    // tables
+    for (uint32_t i = 0; i < RS->super.table_count; i++)
+    {
+        set_index_mask |= (1 << RS->super.tables[i].set_index);
+    }
+    // static samplers
+    for (uint32_t i = 0; i < RS->super.static_sampler_count; i++)
+    {
+        set_index_mask |= (1 << RS->super.static_samplers[i].set);
+    }
+    // parse
+    //const uint32_t set_count = get_set_count(set_index_mask);
+    uint32_t set_count = 0;
+    uint32_t m         = set_index_mask;
+    while (m != 0)
+    {
+        if (m & 1)
+        {
+            set_count++;
+        }
+        m >>= 1;
+    }
+    RS->pSetLayouts          = (SetLayout_Vulkan*)malloc(set_count * sizeof(SetLayout_Vulkan));
+    RS->setLayoutsCount      = set_count;
+    uint32_t set_index       = 0;
+    while (set_index_mask != 0)
+    {
+        if (set_index_mask & 1)
+        {
+            GPUParameterTable* param_table = NULL;
+            for (uint32_t i = 0; i < RS->super.table_count; i++)
+            {
+                if (RS->super.tables[i].set_index == set_index)
+                {
+                    param_table = &RS->super.tables[i];
+                    break;
+                }
+            }
+            uint32_t bindings_count                  = param_table ? param_table->resources_count + desc->static_sampler_count : 0 + desc->static_sampler_count;
+            VkDescriptorSetLayoutBinding* vkbindings = (VkDescriptorSetLayoutBinding*)malloc(bindings_count * sizeof(VkDescriptorSetLayoutBinding));
+            uint32_t i_binding = 0;
+            // bindings
+            if (param_table)
+            {
+                for (i_binding = 0; i_binding < param_table->resources_count; i_binding++)
+                {
+                    vkbindings[i_binding].binding         = param_table->resources[i_binding].binding;
+                    vkbindings[i_binding].stageFlags      = VulkanUtil_TranslateShaderUsages(param_table->resources[i_binding].stages);
+                    vkbindings[i_binding].descriptorType  = VulkanUtil_TranslateResourceType(param_table->resources[i_binding].type);
+                    vkbindings[i_binding].descriptorCount = param_table->resources[i_binding].size;
+                }
+            }
+            // static samplers
+            /*for (uint32_t i_ss = 0; i_ss < desc->static_sampler_count; i_ss++)
+            {
+                if (RS->super.static_samplers[i_ss].set == set_index)
+                {
+                    GPUSampler_Vulkan* immutableSampler     = (GPUSampler_Vulkan*)desc->static_samplers[i_ss];
+                    vkbindings[i_binding].pImmutableSamplers = &immutableSampler->pVkSampler;
+                    vkbindings[i_binding].binding            = RS->super.static_samplers[i_ss].binding;
+                    vkbindings[i_binding].stageFlags         = VkUtil_TranslateShaderUsages(RS->super.static_samplers[i_ss].stages);
+                    vkbindings[i_binding].descriptorType     = VkUtil_TranslateResourceType(RS->super.static_samplers[i_ss].type);
+                    vkbindings[i_binding].descriptorCount    = RS->super.static_samplers[i_ss].size;
+                    i_binding++;
+                }
+            }*/
+            VkDescriptorSetLayoutCreateInfo set_info = {
+                .sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+                .pNext        = NULL,
+                .flags        = 0,
+                .bindingCount = i_binding,
+                .pBindings    = vkbindings
+            };
+            assert(D->mVkDeviceTable.vkCreateDescriptorSetLayout(D->pDevice,
+                                                                 &set_info,
+                                                                 GLOBAL_VkAllocationCallbacks,
+                                                                 &RS->pSetLayouts[set_index].pLayout) == VK_SUCCESS);
+            //vkAllocateDescriptorSets
+            VkDescriptorSetAllocateInfo setsAllocInfo{};
+            setsAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+            setsAllocInfo.descriptorPool = D->pDescriptorPool->pVkDescPool;
+            setsAllocInfo.descriptorSetCount = 1;
+            setsAllocInfo.pSetLayouts        = &RS->pSetLayouts[set_index].pLayout;
+            assert(D->mVkDeviceTable.vkAllocateDescriptorSets(D->pDevice, &setsAllocInfo, &RS->pSetLayouts[set_index].pEmptyDescSet) == VK_SUCCESS);
+
+            if (bindings_count) free(vkbindings);
+        }
+        set_index++;
+        set_index_mask >>= 1;
+    }
+    // Push constants
+    // Collect push constants count
+    /* if (RS->super.push_constant_count > 0)
+    {
+        RS->pPushConstRanges = (VkPushConstantRange*)cgpu_calloc(RS->super.push_constant_count, sizeof(VkPushConstantRange));
+        // Create Vk Objects
+        for (uint32_t i_const = 0; i_const < RS->super.push_constant_count; i_const++)
+        {
+            RS->pPushConstRanges[i_const].stageFlags =
+            VkUtil_TranslateShaderUsages(RS->super.push_constants[i_const].stages);
+            RS->pPushConstRanges[i_const].size   = RS->super.push_constants[i_const].size;
+            RS->pPushConstRanges[i_const].offset = RS->super.push_constants[i_const].offset;
+        }
+    }*/
+    // Record Descriptor Sets
+    RS->pVkSetLayouts = (VkDescriptorSetLayout*)malloc(set_count * sizeof(VkDescriptorSetLayout));
+    for (uint32_t i_set = 0; i_set < set_count; i_set++)
+    {
+        SetLayout_Vulkan* set_to_record = (SetLayout_Vulkan*)&RS->pSetLayouts[i_set];
+        RS->pVkSetLayouts[i_set]        = set_to_record->pLayout;
+    }
+    // Create Pipeline Layout
+    VkPipelineLayoutCreateInfo pipeline_info = {
+        .sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .pNext                  = NULL,
+        .flags                  = 0,
+        .setLayoutCount         = set_count,
+        .pSetLayouts            = RS->pVkSetLayouts,
+        .pushConstantRangeCount = RS->super.push_constant_count,
+        //.pPushConstantRanges    = RS->pPushConstRanges
+    };
+    assert(D->mVkDeviceTable.vkCreatePipelineLayout(D->pDevice, &pipeline_info, GLOBAL_VkAllocationCallbacks, &RS->pPipelineLayout) == VK_SUCCESS);
+    // Create Update Templates
+    for (uint32_t i_table = 0; i_table < RS->super.table_count; i_table++)
+    {
+        GPUParameterTable* param_table                    = &RS->super.tables[i_table];
+        SetLayout_Vulkan* set_to_record                   = &RS->pSetLayouts[param_table->set_index];
+        uint32_t update_entry_count                       = param_table->resources_count;
+        VkDescriptorUpdateTemplateEntry* template_entries = (VkDescriptorUpdateTemplateEntry*)calloc(
+        param_table->resources_count, sizeof(VkDescriptorUpdateTemplateEntry));
+        for (uint32_t i_iter = 0; i_iter < param_table->resources_count; i_iter++)
+        {
+            uint32_t i_binding                          = param_table->resources[i_iter].binding;
+            VkDescriptorUpdateTemplateEntry* this_entry = template_entries + i_iter;
+            this_entry->descriptorCount                 = param_table->resources[i_iter].size;
+            this_entry->descriptorType                  = VulkanUtil_TranslateResourceType(param_table->resources[i_iter].type);
+            this_entry->dstBinding                      = i_binding;
+            this_entry->dstArrayElement                 = 0;
+            this_entry->stride                          = sizeof(VkDescriptorUpdateData);
+            this_entry->offset                          = this_entry->dstBinding * this_entry->stride;
+        }
+        if (update_entry_count > 0)
+        {
+            VkDescriptorUpdateTemplateCreateInfo template_info = {
+                .sType                      = VK_STRUCTURE_TYPE_DESCRIPTOR_UPDATE_TEMPLATE_CREATE_INFO,
+                .pNext                      = NULL,
+                .descriptorUpdateEntryCount = update_entry_count,
+                .pDescriptorUpdateEntries   = template_entries,
+                .templateType               = VK_DESCRIPTOR_UPDATE_TEMPLATE_TYPE_DESCRIPTOR_SET_KHR,
+                .descriptorSetLayout        = set_to_record->pLayout,
+                .pipelineBindPoint          = gPipelineBindPoint[RS->super.pipeline_type],
+                .pipelineLayout             = RS->pPipelineLayout,
+                .set                        = param_table->set_index
+            };
+            set_to_record->updateEntriesCount = update_entry_count;
+            assert(D->mVkDeviceTable.vkCreateDescriptorUpdateTemplate(
+                D->pDevice,
+                &template_info, GLOBAL_VkAllocationCallbacks, &set_to_record->pUpdateTemplate) == VK_SUCCESS);
+        }
+        free(template_entries);
+    }
+    // [RS POOL] INSERTION
+    if (desc->pool)
+    {
+        /*const bool result = CGPUUtil_AddSignature(desc->pool, &RS->super, desc);
+        cgpu_assert(result && "Root signature pool insertion failed!");*/
+    }
+    // [RS POOL] END INSERTION
+    return &RS->super;
+}
+
+void GPUFreeRootSignature_Vulkan(GPURootSignatureID RS)
+{
+    GPUDevice_Vulkan* D           = (GPUDevice_Vulkan*)RS->device;
+    GPURootSignature_Vulkan* vkRS = (GPURootSignature_Vulkan*)RS;
+    GPUUtil_FreeRSParamTables((GPURootSignature*)RS);
+
+    // Free Vk Objects
+    for (uint32_t i_set = 0; i_set < vkRS->setLayoutsCount; i_set++)
+    {
+        SetLayout_Vulkan* set_to_free = &vkRS->pSetLayouts[i_set];
+        if (set_to_free->pLayout != VK_NULL_HANDLE)
+            D->mVkDeviceTable.vkDestroyDescriptorSetLayout(D->pDevice, set_to_free->pLayout, GLOBAL_VkAllocationCallbacks);
+        if (set_to_free->pUpdateTemplate != VK_NULL_HANDLE)
+            D->mVkDeviceTable.vkDestroyDescriptorUpdateTemplate(D->pDevice, set_to_free->pUpdateTemplate, GLOBAL_VkAllocationCallbacks);
+    }
+    GPU_SAFE_FREE(vkRS->pVkSetLayouts);
+    GPU_SAFE_FREE(vkRS->pSetLayouts);
+    GPU_SAFE_FREE(vkRS->pPushConstantRanges);
+    D->mVkDeviceTable.vkDestroyPipelineLayout(D->pDevice, vkRS->pPipelineLayout, GLOBAL_VkAllocationCallbacks);
+    GPU_SAFE_FREE(vkRS);
+
+}
+
+bool CGPUUtil_ShaderResourceIsRootConst(GPUShaderResource* resource, const struct GPURootSignatureDescriptor* desc)
+{
+    if (resource->type == GPU_RESOURCE_TYPE_PUSH_CONSTANT) return true;
+    for (uint32_t i = 0; i < desc->push_constant_count; i++)
+    {
+        if (strcmp((const char*)resource->name, (const char*)desc->push_constant_names[i]) == 0)
+            return true;
+    }
+    return false;
+}
+
+bool CGPUUtil_ShaderResourceIsStaticSampler(GPUShaderResource* resource, const struct GPURootSignatureDescriptor* desc)
+{
+    for (uint32_t i = 0; i < desc->static_sampler_count; i++)
+    {
+        if (strcmp((const char*)resource->name, (const char*)desc->static_sampler_names[i]) == 0)
+        {
+            return resource->type == GPU_RESOURCE_TYPE_SAMPLER;
+        }
+    }
+    return false;
+}
+inline static char8_t* duplicate_string(const char8_t* src_string)
+{
+    if (src_string != NULL)
+    {
+        const size_t source_len = strlen((const char*)src_string);
+        char8_t* result         = (char8_t*)malloc(sizeof(char8_t) * (1 + source_len));
+#ifdef _WIN32
+        strcpy_s((char*)result, source_len + 1, (const char*)src_string);
+#else
+        strcpy((char*)result, (const char*)src_string);
+#endif
+        return result;
+    }
+    return NULL;
+}
+
+#include <set>
+// 这是一个非常复杂的过程，牵扯到大量的move和join操作。具体的逻辑如下：
+// 1.收集所有ShaderStage中出现的所有ShaderResource，不管他们是否重复
+//   这个阶段也会收集所有的RootConst，并且对它们进行合并（不同阶段出现的相同RootConst的Stage合并）
+//   也会收集所有的StaticSamplers
+// 2.合并ShaderResources到RootSignatureTable（下称为RST）中
+//   拥有相同set、binding以及type的、出现在不同ShaderStage中的ShaderResource会被合并Stage
+// 3.切分行
+//   按照Set把合并好的Resource分割并放进roosting::tables中
+void CGPUUtil_InitRSParamTables(GPURootSignature* RS, const struct GPURootSignatureDescriptor* desc)
+{
+    GPUShaderReflection* entry_reflections[32] = { 0 };
+    // Pick shader reflection data
+    for (uint32_t i = 0; i < desc->shader_count; i++)
+    {
+        const GPUShaderEntryDescriptor* shader_desc = &desc->shaders[i];
+        // Find shader reflection
+        for (uint32_t j = 0; j < shader_desc->pLibrary->entrys_count; j++)
+        {
+            GPUShaderReflection* temp_entry_reflcetion = &shader_desc->pLibrary->entry_reflections[j];
+            if (temp_entry_reflcetion->entry_name)
+            {
+                if (strcmp((const char*)shader_desc->entry, (const char*)temp_entry_reflcetion->entry_name) == 0)
+                {
+                    entry_reflections[i] = temp_entry_reflcetion;
+                    break;
+                }
+            }
+        }
+        if (entry_reflections[i] == NULL)
+        {
+            entry_reflections[i] = &shader_desc->pLibrary->entry_reflections[0];
+        }
+    }
+    // Collect all resources
+    RS->pipeline_type = GPU_PIPELINE_TYPE_NONE;
+    std::vector<GPUShaderResource> all_resources;
+    std::vector<GPUShaderResource> all_push_constants;
+    std::vector<GPUShaderResource> all_static_samplers;
+    for (uint32_t i = 0; i < desc->shader_count; i++)
+    {
+        GPUShaderReflection* reflection = entry_reflections[i];
+        for (uint32_t j = 0; j < reflection->shader_resources_count; j++)
+        {
+            GPUShaderResource& resource = reflection->shader_resources[j];
+            if (CGPUUtil_ShaderResourceIsRootConst(&resource, desc))
+            {
+                bool coincided = false;
+                for (auto&& root_const : all_push_constants)
+                {
+                    if (root_const.name_hash == resource.name_hash &&
+                        root_const.set == resource.set &&
+                        root_const.binding == resource.binding &&
+                        root_const.size == resource.size)
+                    {
+                        root_const.stages |= resource.stages;
+                        coincided = true;
+                    }
+                }
+                if (!coincided)
+                    all_push_constants.emplace_back(resource);
+            }
+            else if (CGPUUtil_ShaderResourceIsStaticSampler(&resource, desc))
+            {
+                bool coincided = false;
+                for (auto&& static_sampler : all_static_samplers)
+                {
+                    if (static_sampler.name_hash == resource.name_hash &&
+                        static_sampler.set == resource.set &&
+                        static_sampler.binding == resource.binding)
+                    {
+                        static_sampler.stages |= resource.stages;
+                        coincided = true;
+                    }
+                }
+                if (!coincided)
+                    all_static_samplers.emplace_back(resource);
+            }
+            else
+            {
+                all_resources.emplace_back(resource);
+            }
+        }
+        // Pipeline Type
+        if (reflection->stage & GPU_SHADER_STAGE_COMPUTE)
+            RS->pipeline_type = GPU_PIPELINE_TYPE_COMPUTE;
+        else if (reflection->stage & GPU_SHADER_STAGE_RAYTRACING)
+            RS->pipeline_type = GPU_PIPELINE_TYPE_RAYTRACING;
+        else
+            RS->pipeline_type = GPU_PIPELINE_TYPE_GRAPHICS;
+    }
+    // Merge
+    std::set<uint32_t> valid_sets;
+    std::vector<GPUShaderResource> RST_resources;
+    RST_resources.reserve(all_resources.size());
+    for (auto&& shader_resource : all_resources)
+    {
+        bool coincided = false;
+        for (auto&& RST_resource : RST_resources)
+        {
+            if (RST_resource.set == shader_resource.set &&
+                RST_resource.binding == shader_resource.binding &&
+                RST_resource.type == shader_resource.type)
+            {
+                RST_resource.stages |= shader_resource.stages;
+                coincided = true;
+            }
+        }
+        if (!coincided)
+        {
+            valid_sets.insert(shader_resource.set);
+            RST_resources.emplace_back(shader_resource);
+        }
+    }
+    std::stable_sort(RST_resources.begin(), RST_resources.end(),
+                       [](const GPUShaderResource& lhs, const GPUShaderResource& rhs) {
+                           if (lhs.set != rhs.set)
+                               return lhs.set < rhs.set;
+                           else
+                               return lhs.binding < rhs.binding;
+                       });
+    // Slice
+    RS->table_count      = (uint32_t)valid_sets.size();
+    RS->tables           = (GPUParameterTable*)malloc(RS->table_count * sizeof(GPUParameterTable));
+    uint32_t table_index = 0;
+    for (auto set_index : valid_sets)
+    {
+        GPUParameterTable& table = RS->tables[table_index];
+        table.set_index           = set_index;
+        table.resources_count     = 0;
+        for (auto&& RST_resource : RST_resources)
+        {
+            if (RST_resource.set == set_index)
+                table.resources_count++;
+        }
+        table.resources = (GPUShaderResource*)malloc(
+        table.resources_count * sizeof(GPUShaderResource));
+        uint32_t slot_index = 0;
+        for (auto&& RST_resource : RST_resources)
+        {
+            if (RST_resource.set == set_index)
+            {
+                table.resources[slot_index] = RST_resource;
+                slot_index++;
+            }
+        }
+        table_index++;
+    }
+    // push constants
+    RS->push_constant_count = (uint32_t)all_push_constants.size();
+    RS->push_constants      = (GPUShaderResource*)malloc(
+    RS->push_constant_count * sizeof(GPUShaderResource));
+    for (uint32_t i = 0; i < all_push_constants.size(); i++)
+    {
+        RS->push_constants[i] = all_push_constants[i];
+    }
+    // static samplers
+    std::stable_sort(all_static_samplers.begin(), all_static_samplers.end(),
+                       [](const GPUShaderResource& lhs, const GPUShaderResource& rhs) {
+                           if (lhs.set != rhs.set)
+                               return lhs.set < rhs.set;
+                           else
+                               return lhs.binding < rhs.binding;
+                       });
+    RS->static_sampler_count = (uint32_t)all_static_samplers.size();
+    RS->static_samplers      = (GPUShaderResource*)malloc(
+    RS->static_sampler_count * sizeof(GPUShaderResource));
+    for (uint32_t i = 0; i < all_static_samplers.size(); i++)
+    {
+        RS->static_samplers[i] = all_static_samplers[i];
+    }
+    // copy names
+    for (uint32_t i = 0; i < RS->push_constant_count; i++)
+    {
+        GPUShaderResource* dst = RS->push_constants + i;
+        dst->name               = duplicate_string(dst->name);
+    }
+    for (uint32_t i = 0; i < RS->static_sampler_count; i++)
+    {
+        GPUShaderResource* dst = RS->static_samplers + i;
+        dst->name               = duplicate_string(dst->name);
+    }
+    for (uint32_t i = 0; i < RS->table_count; i++)
+    {
+        GPUParameterTable* set_to_record = &RS->tables[i];
+        for (uint32_t j = 0; j < set_to_record->resources_count; j++)
+        {
+            GPUShaderResource* dst = &set_to_record->resources[j];
+            dst->name               = duplicate_string(dst->name);
+        }
+    }
+}
+
+void GPUUtil_FreeRSParamTables(GPURootSignature* RS)
+{
+    if (RS->tables != NULL)
+    {
+        for (uint32_t i_set = 0; i_set < RS->table_count; i_set++)
+        {
+            GPUParameterTable* param_table = &RS->tables[i_set];
+            if (param_table->resources != NULL)
+            {
+                for (uint32_t i_binding = 0; i_binding < param_table->resources_count; i_binding++)
+                {
+                    GPUShaderResource* binding_to_free = &param_table->resources[i_binding];
+                    if (binding_to_free->name != NULL)
+                    {
+                        free((char8_t*)binding_to_free->name);
+                    }
+                }
+                free(param_table->resources);
+            }
+        }
+        free(RS->tables);
+    }
+    if (RS->push_constants != NULL)
+    {
+        for (uint32_t i = 0; i < RS->push_constant_count; i++)
+        {
+            GPUShaderResource* binding_to_free = RS->push_constants + i;
+            if (binding_to_free->name != NULL)
+            {
+                free((char8_t*)binding_to_free->name);
+            }
+        }
+        free(RS->push_constants);
+    }
+    if (RS->static_samplers != NULL)
+    {
+        for (uint32_t i = 0; i < RS->static_sampler_count; i++)
+        {
+            GPUShaderResource* binding_to_free = RS->static_samplers + i;
+            if (binding_to_free->name != NULL)
+            {
+                free((char8_t*)binding_to_free->name);
+            }
+        }
+        free(RS->static_samplers);
+    }
+}
+
+
+GPUCommandPoolID GPUCreateCommandPool_Vulkan(GPUQueueID queue)
+{
+    GPUDevice_Vulkan* D = (GPUDevice_Vulkan*)queue->pDevice;
+    GPUCommandPool_Vulkan* pPool = (GPUCommandPool_Vulkan*)calloc(1, sizeof(GPUCommandPool_Vulkan));
+    pPool->pPool                 = AllocateTransientCommandPool(D, queue);
+    return &pPool->super;
+}
+
+VkCommandPool AllocateTransientCommandPool(struct GPUDevice_Vulkan* D, GPUQueueID queue)
+{
+    VkCommandPool p = VK_NULL_HANDLE;
+
+    VkCommandPoolCreateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    info.queueFamilyIndex = queue->queueIndex;
+    assert(D->mVkDeviceTable.vkCreateCommandPool(D->pDevice, &info, GLOBAL_VkAllocationCallbacks, &p) == VK_SUCCESS);
+
+    return p;
+}
+
+void GPUFreeCommandPool_Vulkan(GPUCommandPoolID pool)
+{
+    GPUDevice_Vulkan* D = (GPUDevice_Vulkan*)pool->queue->pDevice;
+    GPUCommandPool_Vulkan* P = (GPUCommandPool_Vulkan*)pool;
+    D->mVkDeviceTable.vkDestroyCommandPool(D->pDevice, P->pPool, GLOBAL_VkAllocationCallbacks);
+    GPU_SAFE_FREE(P);
+}
+
+void GPUResetCommandPool_Vulkan(GPUCommandPoolID pool)
+{
+    GPUDevice_Vulkan* D      = (GPUDevice_Vulkan*)pool->queue->pDevice;
+    GPUCommandPool_Vulkan* P = (GPUCommandPool_Vulkan*)pool;
+    VkResult r = D->mVkDeviceTable.vkResetCommandPool(D->pDevice, P->pPool, 0);
+    if (r != VK_SUCCESS) assert(0);
+}
+
+GPUCommandBufferID GPUCreateCommandBuffer_Vulkan(GPUCommandPoolID pool, const GPUCommandBufferDescriptor* desc)
+{
+    GPUDevice_Vulkan* D      = (GPUDevice_Vulkan*)pool->queue->pDevice;
+    GPUCommandPool_Vulkan* P = (GPUCommandPool_Vulkan*)pool;
+    GPUCommandBuffer_Vulkan* B = (GPUCommandBuffer_Vulkan*)_aligned_malloc(sizeof(GPUCommandBuffer_Vulkan), _alignof(GPUCommandBuffer_Vulkan));
+    memset(B, 0, sizeof(GPUCommandBuffer_Vulkan));
+    B->type                    = pool->queue->queueType;
+
+    VkCommandBufferAllocateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    info.commandPool = P->pPool;
+    info.level       = desc->isSecondary ? VK_COMMAND_BUFFER_LEVEL_SECONDARY : VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    info.commandBufferCount = 1;
+
+    VkResult rs = D->mVkDeviceTable.vkAllocateCommandBuffers(D->pDevice, &info, &B->pVkCmd);
+    assert(rs == VK_SUCCESS);
+
+    return &B->super;
+}
+
+void GPUFreeCommandBuffer_Vulkan(GPUCommandBufferID cmd)
+{
+    GPUDevice_Vulkan* D        = (GPUDevice_Vulkan*)cmd->device;
+    GPUCommandPool_Vulkan* pool = (GPUCommandPool_Vulkan*)cmd->pool;
+    GPUCommandBuffer_Vulkan* B = (GPUCommandBuffer_Vulkan*)cmd;
+    D->mVkDeviceTable.vkFreeCommandBuffers(D->pDevice, pool->pPool, 1, &B->pVkCmd);
+    _aligned_free(B);
 }
