@@ -33,6 +33,8 @@ DEFINE_GPU_OBJECT(GPUSampler)
 DEFINE_GPU_OBJECT(GPURootSignaturePool)
 DEFINE_GPU_OBJECT(GPUCommandPool)
 DEFINE_GPU_OBJECT(GPUCommandBuffer)
+DEFINE_GPU_OBJECT(GPUFence)
+DEFINE_GPU_OBJECT(GPUSemaphore)
 
 #ifdef __cplusplus
 extern "C" {
@@ -253,6 +255,14 @@ extern "C" {
         GPU_PIPELINE_TYPE_MAX_ENUM_BIT = 0x7FFFFFFF
     } EGPUPipelineType;
 
+    typedef enum EGPUFenceStatus
+    {
+        GPU_FENCE_STATUS_COMPLETE = 0,
+        GPU_FENCE_STATUS_INCOMPLETE,
+        GPU_FENCE_STATUS_NOTSUBMITTED,
+        GPU_FENCE_STATUS_MAX_ENUM_BIT = 0x7FFFFFFF
+    } EGPUFenceStatus;
+
 	//instance api
 	GPUInstanceID GPUCreateInstance(const struct GPUInstanceDescriptor* pDesc);
 	typedef GPUInstanceID (*GPUProcCreateInstance)(const struct GPUInstanceDescriptor* pDesc);
@@ -287,6 +297,8 @@ extern "C" {
     typedef GPUSwapchainID (*GPUProcCreateSwapchain)(GPUDeviceID pDevice, GPUSwapchainDescriptor* pDesc);
     void GPUFreeSwapchain(GPUSwapchainID pSwapchain);
     typedef void (*GPUProcFreeSwapchain)(GPUSwapchainID pSwapchain);
+    uint32_t GPUAcquireNextImage(GPUSwapchainID swapchain, const struct GPUAcquireNextDescriptor* desc);
+    typedef uint32_t (*GPUProcAcquireNextImage)(GPUSwapchainID swapchain, const struct GPUAcquireNextDescriptor* desc);
 
 	typedef struct GPUSurfacesProcTable
 	{
@@ -319,6 +331,7 @@ extern "C" {
     void GPUFreeRootSignature(GPURootSignatureID RS);
     typedef void (*GPUProcFreeRootSignature)(GPURootSignatureID RS);
 
+    //command
     GPUCommandPoolID GPUCreateCommandPool(GPUQueueID queue);
     typedef GPUCommandPoolID (*GPUProcCreateCommandPool)(GPUQueueID queue);
     void GPUFreeCommandPool(GPUCommandPoolID pool);
@@ -329,6 +342,21 @@ extern "C" {
     typedef GPUCommandBufferID (*GPUProcCreateCommandBuffer)(GPUCommandPoolID pool, const GPUCommandBufferDescriptor* desc);
     void GPUFreeCommandBuffer(GPUCommandBufferID cmd);
     typedef void (*GPUProcFreeCommandBuffer)(GPUCommandBufferID cmd);
+
+    //fence & semaphore
+    GPUFenceID GPUCreateFence(GPUDeviceID device);
+    typedef GPUFenceID (*GPUProcCreateFence)(GPUDeviceID device);
+    void GPUFreeFence(GPUFenceID fence);
+    typedef void (*GPUProcFreeFence)(GPUFenceID fence);
+    void GPUWaitFences(const GPUFenceID* fences, uint32_t fenceCount);
+    typedef void (*GPUProcWaitFences)(const GPUFenceID* fences, uint32_t fenceCount);
+    EGPUFenceStatus GPUQueryFenceStatus(GPUFenceID fence);
+    typedef EGPUFenceStatus (*GPUProcQueryFenceStatus)(GPUFenceID fence);
+    GPUSemaphoreID GPUCreateSemaphore(GPUDeviceID device);
+    typedef GPUSemaphoreID (*GPUProcCreateSemaphore)(GPUDeviceID device);
+    void GPUFreeSemaphore(GPUSemaphoreID semaphore);
+    typedef void (*GPUProcFreeSemaphore)(GPUSemaphoreID semaphore);
+
 
 	typedef struct GPUProcTable
 	{
@@ -347,6 +375,7 @@ extern "C" {
         // swapchain api
         const GPUProcCreateSwapchain CreateSwapchain;
         const GPUProcFreeSwapchain FreeSwapchain;
+        const GPUProcAcquireNextImage AcquireNextImage;
 
         // texture & texture_view api
         const GPUProcCreateTextureView CreateTextureView;
@@ -363,11 +392,20 @@ extern "C" {
         const GPUProcCreateRootSignature CreateRootSignature;
         const GPUProcFreeRootSignature FreeRootSignature;
 
+        //command
         const GPUProcCreateCommandPool CreateCommandPool;
         const GPUProcFreeCommandPool FreeCommandPool;
         const GPUProcResetCommandPool ResetCommandPool;
         const GPUProcCreateCommandBuffer CreateCommandBuffer;
         const GPUProcFreeCommandBuffer FreeCommandBuffer;
+
+        //fence & semaphore
+        const GPUProcCreateFence CreateFence;
+        const GPUProcFreeFence FreeFence;
+        const GPUProcWaitFences WaitFences;
+        const GPUProcQueryFenceStatus QueryFenceStatus;
+        const GPUProcCreateSemaphore CreateSemaphore;
+        const GPUProcFreeSemaphore FreeSemaphore;
 	}GPUProcTable;
 
 	typedef struct CGPUChainedDescriptor {
@@ -769,6 +807,22 @@ extern "C" {
         GPUCommandPoolID pool;
         EGPUPipelineType currentDispatch;
     } GPUCommandBuffer;
+
+    typedef struct GPUFence
+    {
+        GPUDeviceID device;
+    } GPUFence;
+
+    typedef struct GPUAcquireNextDescriptor
+    {
+        GPUSemaphoreID signal_semaphore;
+        GPUFenceID fence;
+    } GPUAcquireNextDescriptor;
+
+    typedef struct GPUSemaphore
+    {
+        GPUDeviceID device;
+    } GPUSemaphore;
 
 #ifdef __cplusplus
 }

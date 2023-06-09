@@ -62,6 +62,7 @@ const GPUProcTable vkTable = {
     .GetQueue             = &GetQueue_Vulkan,
     .CreateSwapchain      = &GPUCreateSwapchain_Vulkan,
     .FreeSwapchain        = &GPUFreeSwapchain_Vulkan,
+    .AcquireNextImage     = &GPUAcquireNextImage_Vulkan,
     .CreateTextureView    = &GPUCreateTextureView_Vulkan,
     .FreeTextureView      = &GPUFreeTextureView_Vulkan,
     .CreateShaderLibrary  = &GPUCreateShaderLibrary_Vulkan,
@@ -74,7 +75,13 @@ const GPUProcTable vkTable = {
     .FreeCommandPool      = &GPUFreeCommandPool_Vulkan,
     .ResetCommandPool     = &GPUResetCommandPool_Vulkan,
     .CreateCommandBuffer  = &GPUCreateCommandBuffer_Vulkan,
-    .FreeCommandBuffer    = &GPUFreeCommandBuffer_Vulkan
+    .FreeCommandBuffer    = &GPUFreeCommandBuffer_Vulkan,
+    .CreateFence          = &GPUCreateFence_Vulkan,
+    .FreeFence            = &GPUFreeFence_Vulkan,
+    .WaitFences           = &GPUWaitFences_Vulkan,
+    .QueryFenceStatus     = &GPUQueryFenceStatus_Vulkan,
+    .CreateSemaphore      = &GPUCreateSemaphore_Vulkan,
+    .FreeSemaphore        = &GPUFreeSemaphore_Vulkan
 };
 const GPUProcTable* GPUVulkanProcTable()
 {
@@ -709,6 +716,38 @@ void GPUFreeSwapchain_Vulkan(GPUSwapchainID pSwapchain)
     GPUDevice_Vulkan* pDevice = (GPUDevice_Vulkan*)p->super.pDevice;
     pDevice->mVkDeviceTable.vkDestroySwapchainKHR(pDevice->pDevice, p->pVkSwapchain, GLOBAL_VkAllocationCallbacks);
     GPU_SAFE_FREE(p);
+}
+
+uint32_t GPUAcquireNextImage_Vulkan(GPUSwapchainID swapchain, const struct GPUAcquireNextDescriptor* desc)
+{
+    GPUSwapchain_Vulkan* S         = (GPUSwapchain_Vulkan*)swapchain;
+    GPUSemaphore_Vulkan* semaphore = (GPUSemaphore_Vulkan*)desc->signal_semaphore;
+    GPUFence_Vulkan* F             = (GPUFence_Vulkan*)desc->fence;
+    GPUDevice_Vulkan* D            = (GPUDevice_Vulkan*)swapchain->pDevice;
+
+    VkResult result;
+    uint32_t index = 0;
+
+    VkSemaphore vks = semaphore ? semaphore->pVkSemaphore : VK_NULL_HANDLE;
+    VkFence vkf     = F ? F->pVkFence : VK_NULL_HANDLE;
+    result          = vkAcquireNextImageKHR(D->pDevice, S->pVkSwapchain, 0XFFFFFFFFFFFFFFFF, vks, vkf, &index);
+    // If swapchain is out of date, let caller know by setting image index to -1
+    if (result == VK_ERROR_OUT_OF_DATE_KHR)
+    {
+        index = -1;
+        if (F)
+        {
+            F->submitted = false;
+            D->mVkDeviceTable.vkResetFences(D->pDevice, 1, &F->pVkFence);
+        }
+        if (semaphore) semaphore->signaled = false;
+    }
+    else if (result == VK_SUCCESS)
+    {
+        if (F) F->submitted = true;
+        if (semaphore) semaphore->signaled = true;
+    }
+    return index;
 }
 
 GPUTextureViewID GPUCreateTextureView_Vulkan(GPUDeviceID pDevice, const GPUTextureViewDescriptor* pDesc)
@@ -1684,7 +1723,7 @@ VkCommandPool AllocateTransientCommandPool(struct GPUDevice_Vulkan* D, GPUQueueI
     VkCommandPool p = VK_NULL_HANDLE;
 
     VkCommandPoolCreateInfo info{};
-    info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    info.sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     info.queueFamilyIndex = queue->queueIndex;
     assert(D->mVkDeviceTable.vkCreateCommandPool(D->pDevice, &info, GLOBAL_VkAllocationCallbacks, &p) == VK_SUCCESS);
 
@@ -1693,7 +1732,7 @@ VkCommandPool AllocateTransientCommandPool(struct GPUDevice_Vulkan* D, GPUQueueI
 
 void GPUFreeCommandPool_Vulkan(GPUCommandPoolID pool)
 {
-    GPUDevice_Vulkan* D = (GPUDevice_Vulkan*)pool->queue->pDevice;
+    GPUDevice_Vulkan* D      = (GPUDevice_Vulkan*)pool->queue->pDevice;
     GPUCommandPool_Vulkan* P = (GPUCommandPool_Vulkan*)pool;
     D->mVkDeviceTable.vkDestroyCommandPool(D->pDevice, P->pPool, GLOBAL_VkAllocationCallbacks);
     GPU_SAFE_FREE(P);
@@ -1709,16 +1748,16 @@ void GPUResetCommandPool_Vulkan(GPUCommandPoolID pool)
 
 GPUCommandBufferID GPUCreateCommandBuffer_Vulkan(GPUCommandPoolID pool, const GPUCommandBufferDescriptor* desc)
 {
-    GPUDevice_Vulkan* D      = (GPUDevice_Vulkan*)pool->queue->pDevice;
-    GPUCommandPool_Vulkan* P = (GPUCommandPool_Vulkan*)pool;
+    GPUDevice_Vulkan* D        = (GPUDevice_Vulkan*)pool->queue->pDevice;
+    GPUCommandPool_Vulkan* P   = (GPUCommandPool_Vulkan*)pool;
     GPUCommandBuffer_Vulkan* B = (GPUCommandBuffer_Vulkan*)_aligned_malloc(sizeof(GPUCommandBuffer_Vulkan), _alignof(GPUCommandBuffer_Vulkan));
     memset(B, 0, sizeof(GPUCommandBuffer_Vulkan));
-    B->type                    = pool->queue->queueType;
+    B->type = pool->queue->queueType;
 
     VkCommandBufferAllocateInfo info{};
-    info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    info.commandPool = P->pPool;
-    info.level       = desc->isSecondary ? VK_COMMAND_BUFFER_LEVEL_SECONDARY : VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    info.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    info.commandPool        = P->pPool;
+    info.level              = desc->isSecondary ? VK_COMMAND_BUFFER_LEVEL_SECONDARY : VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     info.commandBufferCount = 1;
 
     VkResult rs = D->mVkDeviceTable.vkAllocateCommandBuffers(D->pDevice, &info, &B->pVkCmd);
@@ -1729,9 +1768,92 @@ GPUCommandBufferID GPUCreateCommandBuffer_Vulkan(GPUCommandPoolID pool, const GP
 
 void GPUFreeCommandBuffer_Vulkan(GPUCommandBufferID cmd)
 {
-    GPUDevice_Vulkan* D        = (GPUDevice_Vulkan*)cmd->device;
+    GPUDevice_Vulkan* D         = (GPUDevice_Vulkan*)cmd->device;
     GPUCommandPool_Vulkan* pool = (GPUCommandPool_Vulkan*)cmd->pool;
-    GPUCommandBuffer_Vulkan* B = (GPUCommandBuffer_Vulkan*)cmd;
+    GPUCommandBuffer_Vulkan* B  = (GPUCommandBuffer_Vulkan*)cmd;
     D->mVkDeviceTable.vkFreeCommandBuffers(D->pDevice, pool->pPool, 1, &B->pVkCmd);
     _aligned_free(B);
+}
+
+GPUFenceID GPUCreateFence_Vulkan(GPUDeviceID device)
+{
+    GPUDevice_Vulkan* D = (GPUDevice_Vulkan*)device;
+    GPUFence_Vulkan* F  = (GPUFence_Vulkan*)calloc(1, sizeof(GPUFence_Vulkan));
+
+    VkFenceCreateInfo info{};
+    info.sType  = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    VkResult rs = D->mVkDeviceTable.vkCreateFence(D->pDevice, &info, GLOBAL_VkAllocationCallbacks, &F->pVkFence);
+    assert(rs == VK_SUCCESS);
+    F->submitted = false;
+
+    return &F->super;
+}
+
+void GPUFreeFence_Vulkan(GPUFenceID fence)
+{
+    GPUDevice_Vulkan* D = (GPUDevice_Vulkan*)fence->device;
+    GPUFence_Vulkan* F  = (GPUFence_Vulkan*)fence;
+    D->mVkDeviceTable.vkDestroyFence(D->pDevice, F->pVkFence, GLOBAL_VkAllocationCallbacks);
+    GPU_SAFE_FREE(F);
+}
+
+void GPUWaitFences_Vulkan(const GPUFenceID* fences, uint32_t fenceCount)
+{
+    GPUDevice_Vulkan* D = (GPUDevice_Vulkan*)fences[0]->device;
+    DECLEAR_ZERO_VAL(VkFence, vkFences, fenceCount);
+    uint32_t validCount = 0;
+    for (uint32_t i = 0; i < fenceCount; i++)
+    {
+        GPUFence_Vulkan* vf = (GPUFence_Vulkan*)fences[i];
+        if (vf->submitted) vkFences[validCount++] = vf->pVkFence;
+    }
+    if (validCount > 0)
+    {
+        D->mVkDeviceTable.vkWaitForFences(D->pDevice, validCount, vkFences, VK_TRUE, 0xffffffffffffffff);
+        D->mVkDeviceTable.vkResetFences(D->pDevice, validCount, vkFences);
+    }
+    for (uint32_t i = 0; i < fenceCount; i++)
+    {
+        GPUFence_Vulkan* vf = (GPUFence_Vulkan*)fences[i];
+        vf->submitted       = false;
+    }
+}
+
+EGPUFenceStatus GPUQueryFenceStatus_Vulkan(GPUFenceID fence)
+{
+    EGPUFenceStatus status = GPU_FENCE_STATUS_COMPLETE;
+    GPUFence_Vulkan* F     = (GPUFence_Vulkan*)fence;
+    GPUDevice_Vulkan* D    = (GPUDevice_Vulkan*)fence->device;
+    if (F->submitted)
+    {
+        VkResult rs = vkGetFenceStatus(D->pDevice, F->pVkFence);
+        status      = rs == VK_SUCCESS ? GPU_FENCE_STATUS_COMPLETE : GPU_FENCE_STATUS_INCOMPLETE;
+    }
+    else
+    {
+        status = GPU_FENCE_STATUS_NOTSUBMITTED;
+    }
+    return status;
+}
+
+GPUSemaphoreID GPUCreateSemaphore_Vulkan(GPUDeviceID device)
+{
+    GPUDevice_Vulkan* D    = (GPUDevice_Vulkan*)device;
+    GPUSemaphore_Vulkan* s = (GPUSemaphore_Vulkan*)calloc(1, sizeof(GPUSemaphore_Vulkan));
+
+    VkSemaphoreCreateInfo info{};
+    info.sType  = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    VkResult rs = D->mVkDeviceTable.vkCreateSemaphore(D->pDevice, &info, GLOBAL_VkAllocationCallbacks, &s->pVkSemaphore);
+    assert(rs == VK_SUCCESS);
+    s->signaled = false;
+    
+    return &s->super;
+}
+
+void GPUFreeSemaphore_Vulkan(GPUSemaphoreID semaphore)
+{
+    GPUDevice_Vulkan* D    = (GPUDevice_Vulkan*)semaphore->device;
+    GPUSemaphore_Vulkan* S = (GPUSemaphore_Vulkan*)semaphore;
+    D->mVkDeviceTable.vkDestroySemaphore(D->pDevice, S->pVkSemaphore, GLOBAL_VkAllocationCallbacks);
+    GPU_SAFE_FREE(S);
 }

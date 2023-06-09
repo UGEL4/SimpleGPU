@@ -142,6 +142,14 @@ void GPUFreeSwapchain(GPUSwapchainID pSwapchain)
     pDevice->pProcTableCache->FreeSwapchain(pSwapchain);
 }
 
+uint32_t GPUAcquireNextImage(GPUSwapchainID swapchain, const struct GPUAcquireNextDescriptor* desc)
+{
+    assert(swapchain);
+    assert(swapchain->pDevice);
+    assert(swapchain->pDevice->pProcTableCache->AcquireNextImage);
+    return swapchain->pDevice->pProcTableCache->AcquireNextImage(swapchain, desc);
+}
+
 GPUTextureViewID GPUCreateTextureView(GPUDeviceID pDevice, const struct GPUTextureViewDescriptor* pDesc)
 {
     assert(pDevice);
@@ -296,4 +304,56 @@ void GPUFreeCommandBuffer(GPUCommandBufferID cmd)
     assert(cmd->device);
     assert(cmd->device->pProcTableCache->FreeCommandBuffer);
     cmd->device->pProcTableCache->FreeCommandBuffer(cmd);
+}
+
+GPUFenceID GPUCreateFence(GPUDeviceID device)
+{
+    assert(device);
+    assert(device->pProcTableCache->CreateFence);
+    GPUFence* F = (GPUFence*)device->pProcTableCache->CreateFence(device);
+    F->device   = device;
+    return F;
+}
+
+void GPUFreeFence(GPUFenceID fence)
+{
+    assert(fence);
+    assert(fence->device);
+    assert(fence->device->pProcTableCache->FreeFence);
+    fence->device->pProcTableCache->FreeFence(fence);
+}
+
+void GPUWaitFences(const GPUFenceID* fences, uint32_t fenceCount)
+{
+    if (fences == NULL || fenceCount == 0) return;
+    GPUFenceID fence = fences[0];
+    assert(fence);
+    assert(fence->device);
+    assert(fence->device->pProcTableCache->WaitFences);
+    fence->device->pProcTableCache->WaitFences(fences, fenceCount);
+}
+
+EGPUFenceStatus GPUQueryFenceStatus(GPUFenceID fence)
+{
+    assert(fence);
+    assert(fence->device);
+    assert(fence->device->pProcTableCache->QueryFenceStatus);
+    return fence->device->pProcTableCache->QueryFenceStatus(fence);
+}
+
+GPUSemaphoreID GPUCreateSemaphore(GPUDeviceID device)
+{
+    assert(device);
+    assert(device->pProcTableCache->CreateSemaphore);
+    GPUSemaphore* s = (GPUSemaphore*)device->pProcTableCache->CreateSemaphore(device);
+    s->device       = device;
+    return s;
+}
+
+void GPUFreeSemaphore(GPUSemaphoreID semaphore)
+{
+    assert(semaphore);
+    assert(semaphore->device);
+    assert(semaphore->device->pProcTableCache->FreeSemaphore);
+    semaphore->device->pProcTableCache->FreeSemaphore(semaphore);
 }

@@ -34,6 +34,7 @@ extern "C" {
 	//swapchain
     GPUSwapchainID GPUCreateSwapchain_Vulkan(GPUDeviceID pDevice, GPUSwapchainDescriptor* pDesc);
     void GPUFreeSwapchain_Vulkan(GPUSwapchainID pSwapchain);
+    uint32_t GPUAcquireNextImage_Vulkan(GPUSwapchainID swapchain, const struct GPUAcquireNextDescriptor* desc);
 
     //texture & texture_view api
     GPUTextureViewID GPUCreateTextureView_Vulkan(GPUDeviceID pDevice, const GPUTextureViewDescriptor* pDesc);
@@ -53,12 +54,21 @@ extern "C" {
     void CGPUUtil_InitRSParamTables(GPURootSignature* RS, const struct GPURootSignatureDescriptor* desc);
     void GPUUtil_FreeRSParamTables(GPURootSignature* RS);
 
+    //command
     GPUCommandPoolID GPUCreateCommandPool_Vulkan(GPUQueueID queue);
     VkCommandPool AllocateTransientCommandPool(struct GPUDevice_Vulkan* D, GPUQueueID queue);
     void GPUFreeCommandPool_Vulkan(GPUCommandPoolID pool);
     void GPUResetCommandPool_Vulkan(GPUCommandPoolID pool);
     GPUCommandBufferID GPUCreateCommandBuffer_Vulkan(GPUCommandPoolID pool, const GPUCommandBufferDescriptor* desc);
     void GPUFreeCommandBuffer_Vulkan(GPUCommandBufferID cmd);
+
+    //fence & semaphore
+    GPUFenceID GPUCreateFence_Vulkan(GPUDeviceID device);
+    void GPUFreeFence_Vulkan(GPUFenceID fence);
+    void GPUWaitFences_Vulkan(const GPUFenceID* fences, uint32_t fenceCount);
+    EGPUFenceStatus GPUQueryFenceStatus_Vulkan(GPUFenceID fence);
+    GPUSemaphoreID GPUCreateSemaphore_Vulkan(GPUDeviceID device);
+    void GPUFreeSemaphore_Vulkan(GPUSemaphoreID semaphore);
 
     typedef struct VkUtil_DescriptorPool
     {
@@ -215,6 +225,20 @@ extern "C" {
         VkRenderPass pPass;
         uint32_t type;
     } GPUCommandBuffer_Vulkan;
+
+    typedef struct GPUFence_Vulkan
+    {
+        GPUFence super;
+        VkFence pVkFence;
+        uint32_t submitted : 1;
+    } GPUFence_Vulkan;
+
+    typedef struct GPUSemaphore_Vulkan
+    {
+        GPUSemaphore super;
+        VkSemaphore pVkSemaphore;
+        uint8_t signaled : 1;
+    } GPUSemaphore_Vulkan;
 
 #ifdef __cplusplus
 }

@@ -106,6 +106,8 @@ int main(int argc, char** argv)
 
     GPUQueueID pGraphicQueue = GPUGetQueue(device, EGPUQueueType::GPU_QUEUE_TYPE_GRAPHICS, 0);
 
+    GPUFenceID presenFence = GPUCreateFence(device);
+
     GPUSwapchainDescriptor swapchainDesc{};
     swapchainDesc.ppPresentQueues    = &pGraphicQueue;
     swapchainDesc.presentQueuesCount = 1;
@@ -177,11 +179,16 @@ int main(int argc, char** argv)
     GPUFreeShaderLibrary(pVShader);
     GPUFreeShaderLibrary(pFShader);
 
+    //render loop begin
     GPUCommandPoolID pool = GPUCreateCommandPool(pGraphicQueue);
     GPUCommandBufferDescriptor cmdDesc{};
     cmdDesc.isSecondary = false;
     GPUCommandBufferID cmd = GPUCreateCommandBuffer(pool, &cmdDesc);
+    GPUWaitFences(&presenFence, 1);
+    //render loop end
 
+    GPUWaitFences(&presenFence, 1);
+    GPUFreeFence(presenFence);
     for (uint32_t i = 0; i < pSwapchain->backBuffersCount; i++)
     {
         GPUFreeTextureView(ppSwapchainImage[i]);
