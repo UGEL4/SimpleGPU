@@ -61,6 +61,8 @@ extern "C" {
     void GPUResetCommandPool_Vulkan(GPUCommandPoolID pool);
     GPUCommandBufferID GPUCreateCommandBuffer_Vulkan(GPUCommandPoolID pool, const GPUCommandBufferDescriptor* desc);
     void GPUFreeCommandBuffer_Vulkan(GPUCommandBufferID cmd);
+    void GPUCmdBegin_Vulkan(GPUCommandBufferID cmdBuffer);
+    void GPUCmdEnd_Vulkan(GPUCommandBufferID cmdBuffer);
 
     //fence & semaphore
     GPUFenceID GPUCreateFence_Vulkan(GPUDeviceID device);

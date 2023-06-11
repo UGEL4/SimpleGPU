@@ -306,6 +306,22 @@ void GPUFreeCommandBuffer(GPUCommandBufferID cmd)
     cmd->device->pProcTableCache->FreeCommandBuffer(cmd);
 }
 
+void GPUCmdBegin(GPUCommandBufferID cmdBuffer)
+{
+    assert(cmdBuffer);
+    assert(cmdBuffer->device);
+    assert(cmdBuffer->device->pProcTableCache->CmdBegin);
+    cmdBuffer->device->pProcTableCache->CmdBegin(cmdBuffer);
+}
+
+void GPUCmdEnd(GPUCommandBufferID cmdBuffer)
+{
+    assert(cmdBuffer);
+    assert(cmdBuffer->device);
+    assert(cmdBuffer->device->pProcTableCache->CmdEnd);
+    cmdBuffer->device->pProcTableCache->CmdEnd(cmdBuffer);
+}
+
 GPUFenceID GPUCreateFence(GPUDeviceID device)
 {
     assert(device);

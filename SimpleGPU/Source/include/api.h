@@ -35,6 +35,7 @@ DEFINE_GPU_OBJECT(GPUCommandPool)
 DEFINE_GPU_OBJECT(GPUCommandBuffer)
 DEFINE_GPU_OBJECT(GPUFence)
 DEFINE_GPU_OBJECT(GPUSemaphore)
+DEFINE_GPU_OBJECT(GPUBuffer)
 
 #ifdef __cplusplus
 extern "C" {
@@ -342,6 +343,10 @@ extern "C" {
     typedef GPUCommandBufferID (*GPUProcCreateCommandBuffer)(GPUCommandPoolID pool, const GPUCommandBufferDescriptor* desc);
     void GPUFreeCommandBuffer(GPUCommandBufferID cmd);
     typedef void (*GPUProcFreeCommandBuffer)(GPUCommandBufferID cmd);
+    void GPUCmdBegin(GPUCommandBufferID cmdBuffer);
+    typedef void (*GPUProcCmdBegin)(GPUCommandBufferID cmdBuffer);
+    void GPUCmdEnd(GPUCommandBufferID cmdBuffer);
+    typedef void (*GPUProcCmdEnd)(GPUCommandBufferID cmdBuffer);
 
     //fence & semaphore
     GPUFenceID GPUCreateFence(GPUDeviceID device);
@@ -398,6 +403,8 @@ extern "C" {
         const GPUProcResetCommandPool ResetCommandPool;
         const GPUProcCreateCommandBuffer CreateCommandBuffer;
         const GPUProcFreeCommandBuffer FreeCommandBuffer;
+        const GPUProcCmdBegin CmdBegin;
+        const GPUProcCmdEnd CmdEnd;
 
         //fence & semaphore
         const GPUProcCreateFence CreateFence;
@@ -823,6 +830,127 @@ extern "C" {
     {
         GPUDeviceID device;
     } GPUSemaphore;
+
+    typedef union GPUClearValue
+    {
+        struct
+        {
+            float r;
+            float g;
+            float b;
+            float a;
+        };
+        struct
+        {
+            float depth;
+            uint32_t stencil;
+        };
+    } GPUClearValue;
+
+    typedef struct GPUColorAttachment {
+        GPUTextureViewID view;
+        GPUTextureViewID resolve_view;
+        EGPULoadAction load_action;
+        EGPUStoreAction store_action;
+        GPUClearValue clear_color;
+    } GPUColorAttachment;
+
+    typedef struct GPUDepthStencilAttachment {
+        GPUTextureViewID view;
+        EGPULoadAction depth_load_action;
+        EGPUStoreAction depth_store_action;
+        float clear_depth;
+        uint8_t write_depth;
+        EGPULoadAction stencil_load_action;
+        EGPUStoreAction stencil_store_action;
+        uint32_t clear_stencil;
+        uint8_t write_stencil;
+    } GPUDepthStencilAttachment;
+
+    typedef struct GPURenderPassDescriptor
+    {
+        const char8_t* name;
+        // TODO: support multi-target & remove this
+        EGPUSampleCount sample_count;
+        const GPUColorAttachment* color_attachments;
+        const GPUDepthStencilAttachment* depth_stencil;
+        uint32_t render_target_count;
+    } GPURenderPassDescriptor;
+
+    typedef enum EGPUResourceState
+    {
+        GPU_RESOURCE_STATE_UNDEFINED = 0,
+        GPU_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER = 0x1,
+        GPU_RESOURCE_STATE_INDEX_BUFFER = 0x2,
+        GPU_RESOURCE_STATE_RENDER_TARGET = 0x4,
+        GPU_RESOURCE_STATE_UNORDERED_ACCESS = 0x8,
+        GPU_RESOURCE_STATE_DEPTH_WRITE = 0x10,
+        GPU_RESOURCE_STATE_DEPTH_READ = 0x20,
+        GPU_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE = 0x40,
+        GPU_RESOURCE_STATE_PIXEL_SHADER_RESOURCE = 0x80,
+        GPU_RESOURCE_STATE_SHADER_RESOURCE = 0x40 | 0x80,
+        GPU_RESOURCE_STATE_STREAM_OUT = 0x100,
+        GPU_RESOURCE_STATE_INDIRECT_ARGUMENT = 0x200,
+        GPU_RESOURCE_STATE_COPY_DEST = 0x400,
+        GPU_RESOURCE_STATE_COPY_SOURCE = 0x800,
+        GPU_RESOURCE_STATE_GENERIC_READ = (((((0x1 | 0x2) | 0x40) | 0x80) | 0x200) | 0x800),
+        GPU_RESOURCE_STATE_PRESENT = 0x1000,
+        GPU_RESOURCE_STATE_COMMON = 0x2000,
+        GPU_RESOURCE_STATE_ACCELERATION_STRUCTURE = 0x4000,
+        GPU_RESOURCE_STATE_SHADING_RATE_SOURCE = 0x8000,
+        GPU_RESOURCE_STATE_RESOLVE_DEST = 0x10000,
+        GPU_RESOURCE_STATE_MAX_ENUM_BIT = 0x7FFFFFFF
+    } EGPUResourceState;
+    typedef uint32_t GPUResourceStates;
+
+    typedef struct GPUTextureBarrier {
+        GPUTextureID texture;
+        EGPUResourceState src_state;
+        EGPUResourceState dst_state;
+        uint8_t queue_acquire;
+        uint8_t queue_release;
+        EGPUQueueType queue_type;
+        /// Specifiy whether following barrier targets particular subresource
+        uint8_t subresource_barrier;
+        /// Following values are ignored if subresource_barrier is false
+        uint8_t mip_level;
+        uint16_t array_layer;
+        uint8_t d3d12_begin_only;
+        uint8_t d3d12_end_only;
+    } GPUTextureBarrier;
+
+    typedef struct GPUBuffer
+    {
+        GPUDeviceID device;
+        /**
+         * CPU address of the mapped buffer.
+         * Applicable to buffers created in CPU accessible heaps (CPU, CPU_TO_GPU, GPU_TO_CPU)
+         */
+        void* cpu_mapped_address;
+        uint64_t size : 37;
+        uint64_t descriptors : 24;
+        uint64_t memory_usage : 3;
+    } GPUBuffer;
+
+    typedef struct GPUBufferBarrier
+    {
+        GPUBufferID buffer;
+        EGPUResourceState src_state;
+        EGPUResourceState dst_state;
+        uint8_t queue_acquire;
+        uint8_t queue_release;
+        EGPUQueueType queue_type;
+        uint8_t d3d12_begin_only;
+        uint8_t d3d12_end_only;
+    } GPUBufferBarrier;
+
+    typedef struct GPUResourceBarrierDescriptor
+    {
+        const GPUBufferBarrier* buffer_barriers;
+        uint32_t buffer_barriers_count;
+        const GPUTextureBarrier* texture_barriers;
+        uint32_t texture_barriers_count;
+    } CGPUResourceBarrierDescriptor;
 
 #ifdef __cplusplus
 }

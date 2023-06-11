@@ -76,6 +76,8 @@ const GPUProcTable vkTable = {
     .ResetCommandPool     = &GPUResetCommandPool_Vulkan,
     .CreateCommandBuffer  = &GPUCreateCommandBuffer_Vulkan,
     .FreeCommandBuffer    = &GPUFreeCommandBuffer_Vulkan,
+    .CmdBegin             = &GPUCmdBegin_Vulkan,
+    .CmdEnd               = &GPUCmdEnd_Vulkan,
     .CreateFence          = &GPUCreateFence_Vulkan,
     .FreeFence            = &GPUFreeFence_Vulkan,
     .WaitFences           = &GPUWaitFences_Vulkan,
@@ -1773,6 +1775,26 @@ void GPUFreeCommandBuffer_Vulkan(GPUCommandBufferID cmd)
     GPUCommandBuffer_Vulkan* B  = (GPUCommandBuffer_Vulkan*)cmd;
     D->mVkDeviceTable.vkFreeCommandBuffers(D->pDevice, pool->pPool, 1, &B->pVkCmd);
     _aligned_free(B);
+}
+
+void GPUCmdBegin_Vulkan(GPUCommandBufferID cmdBuffer)
+{
+    GPUDevice_Vulkan* D = (GPUDevice_Vulkan*)cmdBuffer->device;
+    GPUCommandBuffer_Vulkan* CMD = (GPUCommandBuffer_Vulkan*)cmdBuffer;
+
+    VkCommandBufferBeginInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    assert(D->mVkDeviceTable.vkBeginCommandBuffer(CMD->pVkCmd, &info) == VK_SUCCESS);
+    CMD->pLayout = VK_NULL_HANDLE;
+}
+
+void GPUCmdEnd_Vulkan(GPUCommandBufferID cmdBuffer)
+{
+    GPUDevice_Vulkan* D = (GPUDevice_Vulkan*)cmdBuffer->device;
+    GPUCommandBuffer_Vulkan* CMD = (GPUCommandBuffer_Vulkan*)cmdBuffer;
+    assert(D->mVkDeviceTable.vkEndCommandBuffer(CMD->pVkCmd) == VK_SUCCESS);
 }
 
 GPUFenceID GPUCreateFence_Vulkan(GPUDeviceID device)
