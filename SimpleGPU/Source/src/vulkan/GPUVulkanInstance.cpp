@@ -1797,6 +1797,146 @@ void GPUCmdEnd_Vulkan(GPUCommandBufferID cmdBuffer)
     assert(D->mVkDeviceTable.vkEndCommandBuffer(CMD->pVkCmd) == VK_SUCCESS);
 }
 
+void GPUCmdResourceBarrier_Vulkan(GPUCommandBufferID cmd, const GPUResourceBarrierDescriptor* desc)
+{
+    GPUCommandBuffer_Vulkan* Cmd = (GPUCommandBuffer_Vulkan*)cmd;
+    GPUDevice_Vulkan* D = (GPUDevice_Vulkan*)cmd->device;
+    GPUAdapter_Vulkan* A = (GPUAdapter_Vulkan*)cmd->device->pAdapter;
+    VkAccessFlags srcAccessFlags = 0;
+    VkAccessFlags dstAccessFlags = 0;
+
+    DECLEAR_ZERO_VAL(VkBufferMemoryBarrier, BBs, desc->buffer_barriers_count);
+    uint32_t bufferBarrierCount = 0;
+    for (uint32_t i = 0; i < desc->buffer_barriers_count; i++)
+    {
+        const GPUBufferBarrier* buffer_barrier = &desc->buffer_barriers[i];
+        GPUBuffer_Vulkan* B = (GPUBuffer_Vulkan*)buffer_barrier->buffer;
+        VkBufferMemoryBarrier* pBufferBarrier = NULL;
+
+        if (GPU_RESOURCE_STATE_UNORDERED_ACCESS == buffer_barrier->src_state &&
+            GPU_RESOURCE_STATE_UNORDERED_ACCESS == buffer_barrier->dst_state)
+        {
+            pBufferBarrier = &BBs[bufferBarrierCount++];                     //-V522
+            pBufferBarrier->sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER; //-V522
+            pBufferBarrier->pNext = NULL;
+
+            pBufferBarrier->srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+            pBufferBarrier->dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
+        }
+        else
+        {
+            pBufferBarrier = &BBs[bufferBarrierCount++];
+            pBufferBarrier->sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+            pBufferBarrier->pNext = NULL;
+
+            pBufferBarrier->srcAccessMask = VulkanUtil_ResourceStateToVkAccessFlags(buffer_barrier->src_state);
+            pBufferBarrier->dstAccessMask = VulkanUtil_ResourceStateToVkAccessFlags(buffer_barrier->dst_state);
+        }
+
+        if (pBufferBarrier)
+        {
+            pBufferBarrier->buffer = B->pVkBuffer;
+            pBufferBarrier->size = VK_WHOLE_SIZE;
+            pBufferBarrier->offset = 0;
+
+            if (buffer_barrier->queue_acquire)
+            {
+                pBufferBarrier->dstQueueFamilyIndex = (uint32_t)A->queueFamilyIndices[Cmd->type];
+                pBufferBarrier->srcQueueFamilyIndex = (uint32_t)A->queueFamilyIndices[buffer_barrier->queue_type];
+            }
+            else if (buffer_barrier->queue_release)
+            {
+                pBufferBarrier->srcQueueFamilyIndex = (uint32_t)A->queueFamilyIndices[Cmd->type];
+                pBufferBarrier->dstQueueFamilyIndex = (uint32_t)A->queueFamilyIndices[buffer_barrier->queue_type];
+            }
+            else
+            {
+                pBufferBarrier->srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                pBufferBarrier->dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            }
+            srcAccessFlags |= pBufferBarrier->srcAccessMask;
+            dstAccessFlags |= pBufferBarrier->dstAccessMask;
+        }
+    }
+
+    DECLEAR_ZERO_VAL(VkImageMemoryBarrier, TBs, desc->texture_barriers_count)
+    uint32_t imageBarrierCount = 0;
+    for (uint32_t i = 0; i < desc->texture_barriers_count; i++)
+    {
+        const GPUTextureBarrier* texture_barrier = &desc->texture_barriers[i];
+        GPUTexture_Vulkan* T = (GPUTexture_Vulkan*)texture_barrier->texture;
+        VkImageMemoryBarrier* pImageBarrier = NULL;
+        if (GPU_RESOURCE_STATE_UNORDERED_ACCESS == texture_barrier->src_state &&
+            GPU_RESOURCE_STATE_UNORDERED_ACCESS == texture_barrier->dst_state)
+        {
+            pImageBarrier = &TBs[imageBarrierCount++];
+            pImageBarrier->sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            pImageBarrier->pNext = NULL;
+
+            pImageBarrier->srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+            pImageBarrier->dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT;
+            pImageBarrier->oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+            pImageBarrier->newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        }
+        else
+        {
+            pImageBarrier = &TBs[imageBarrierCount++];
+            pImageBarrier->sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            pImageBarrier->pNext = NULL;
+
+            pImageBarrier->srcAccessMask = VulkanUtil_ResourceStateToVkAccessFlags(texture_barrier->src_state);
+            pImageBarrier->dstAccessMask = VulkanUtil_ResourceStateToVkAccessFlags(texture_barrier->dst_state);
+            pImageBarrier->oldLayout = VulkanUtil_ResourceStateToImageLayout(texture_barrier->src_state);
+            pImageBarrier->newLayout = VulkanUtil_ResourceStateToImageLayout(texture_barrier->dst_state);
+        }
+
+        if (pImageBarrier)
+        {
+            pImageBarrier->image = T->pVkImage;
+            pImageBarrier->subresourceRange.aspectMask = (VkImageAspectFlags)T->super.aspectMask;
+            pImageBarrier->subresourceRange.baseMipLevel = texture_barrier->subresource_barrier ? texture_barrier->mip_level : 0;
+            pImageBarrier->subresourceRange.levelCount = texture_barrier->subresource_barrier ? 1 : VK_REMAINING_MIP_LEVELS;
+            pImageBarrier->subresourceRange.baseArrayLayer = texture_barrier->subresource_barrier ? texture_barrier->array_layer : 0;
+            pImageBarrier->subresourceRange.layerCount = texture_barrier->subresource_barrier ? 1 : VK_REMAINING_ARRAY_LAYERS;
+
+            if (texture_barrier->queue_acquire &&
+                texture_barrier->src_state != GPU_RESOURCE_STATE_UNDEFINED)
+            {
+                pImageBarrier->dstQueueFamilyIndex = (uint32_t)A->queueFamilyIndices[Cmd->type];
+                pImageBarrier->srcQueueFamilyIndex = (uint32_t)A->queueFamilyIndices[texture_barrier->queue_type];
+            }
+            else if (texture_barrier->queue_release &&
+                texture_barrier->src_state != GPU_RESOURCE_STATE_UNDEFINED)
+            {
+                pImageBarrier->srcQueueFamilyIndex = (uint32_t)A->queueFamilyIndices[Cmd->type];
+                pImageBarrier->dstQueueFamilyIndex = (uint32_t)A->queueFamilyIndices[texture_barrier->queue_type];
+            }
+            else
+            {
+                pImageBarrier->srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                pImageBarrier->dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            }
+
+            srcAccessFlags |= pImageBarrier->srcAccessMask;
+            dstAccessFlags |= pImageBarrier->dstAccessMask;
+        }
+    }
+
+    // Commit barriers
+    VkPipelineStageFlags srcStageMask =
+        VulkanUtil_DeterminePipelineStageFlags(A, srcAccessFlags, (EGPUQueueType)Cmd->type);
+    VkPipelineStageFlags dstStageMask =
+        VulkanUtil_DeterminePipelineStageFlags(A, dstAccessFlags, (EGPUQueueType)Cmd->type);
+    if (bufferBarrierCount || imageBarrierCount)
+    {
+        D->mVkDeviceTable.vkCmdPipelineBarrier(Cmd->pVkCmd,
+            srcStageMask, dstStageMask, 0,
+            0, NULL,
+            bufferBarrierCount, BBs,
+            imageBarrierCount, TBs);
+    }
+}
+
 GPUFenceID GPUCreateFence_Vulkan(GPUDeviceID device)
 {
     GPUDevice_Vulkan* D = (GPUDevice_Vulkan*)device;

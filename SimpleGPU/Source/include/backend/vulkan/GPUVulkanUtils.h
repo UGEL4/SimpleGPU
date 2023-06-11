@@ -109,6 +109,147 @@ extern "C" {
         return VK_DESCRIPTOR_TYPE_MAX_ENUM;
     }
 
+    inline static VkAccessFlags VulkanUtil_ResourceStateToVkAccessFlags(EGPUResourceState state)
+    {
+        VkAccessFlags ret = 0;
+        if (state & GPU_RESOURCE_STATE_COPY_SOURCE)
+            ret |= VK_ACCESS_TRANSFER_READ_BIT;
+        if (state & GPU_RESOURCE_STATE_COPY_DEST)
+            ret |= VK_ACCESS_TRANSFER_WRITE_BIT;
+        if (state & GPU_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER)
+            ret |= VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+        if (state & GPU_RESOURCE_STATE_INDEX_BUFFER)
+            ret |= VK_ACCESS_INDEX_READ_BIT;
+        if (state & GPU_RESOURCE_STATE_UNORDERED_ACCESS)
+            ret |= VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+        if (state & GPU_RESOURCE_STATE_INDIRECT_ARGUMENT)
+            ret |= VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
+        if (state & GPU_RESOURCE_STATE_RENDER_TARGET)
+            ret |= VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        if (state & GPU_RESOURCE_STATE_RESOLVE_DEST)
+            ret |= VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        if (state & GPU_RESOURCE_STATE_DEPTH_WRITE)
+            ret |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        if (state & GPU_RESOURCE_STATE_SHADER_RESOURCE)
+            ret |= VK_ACCESS_SHADER_READ_BIT;
+        if (state & GPU_RESOURCE_STATE_PRESENT)
+            ret |= VK_ACCESS_MEMORY_READ_BIT;
+#ifdef ENABLE_RAYTRACING
+        if (state & GPU_RESOURCE_STATE_ACCELERATION_STRUCTURE)
+            ret |= VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_NV | VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_NV;
+#endif
+        return ret;
+    }
+
+    inline static VkImageLayout VulkanUtil_ResourceStateToImageLayout(EGPUResourceState usage)
+    {
+        if (usage & GPU_RESOURCE_STATE_COPY_SOURCE)
+            return VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+
+        if (usage & GPU_RESOURCE_STATE_COPY_DEST)
+            return VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+
+        if (usage & GPU_RESOURCE_STATE_RENDER_TARGET)
+            return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+        if (usage & GPU_RESOURCE_STATE_RESOLVE_DEST)
+            return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+        if (usage & GPU_RESOURCE_STATE_DEPTH_WRITE)
+            return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+        if (usage & GPU_RESOURCE_STATE_UNORDERED_ACCESS)
+            return VK_IMAGE_LAYOUT_GENERAL;
+
+        if (usage & GPU_RESOURCE_STATE_SHADER_RESOURCE)
+            return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+        if (usage & GPU_RESOURCE_STATE_PRESENT)
+            return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+        if (usage == GPU_RESOURCE_STATE_COMMON)
+            return VK_IMAGE_LAYOUT_GENERAL;
+
+        if (usage == GPU_RESOURCE_STATE_SHADING_RATE_SOURCE)
+            return VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT;
+
+        return VK_IMAGE_LAYOUT_UNDEFINED;
+    }
+
+    inline static VkPipelineStageFlags VulkanUtil_DeterminePipelineStageFlags(GPUAdapter_Vulkan* A, VkAccessFlags accessFlags, EGPUQueueType queue_type)
+    {
+        VkPipelineStageFlags flags = 0;
+
+        switch (queue_type)
+        {
+        case GPU_QUEUE_TYPE_GRAPHICS:
+        {
+            if ((accessFlags & (VK_ACCESS_INDEX_READ_BIT | VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT)) != 0)
+                flags |= VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
+
+            if ((accessFlags & (VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT)) != 0)
+            {
+                flags |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
+                flags |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+                /*if (A->adapterDetail.support_geom_shader)
+                {
+                    flags |= VK_PIPELINE_STAGE_GEOMETRY_SHADER_BIT;
+                }
+                if (A->adapterDetail.support_tessellation)
+                {
+                    flags |= VK_PIPELINE_STAGE_TESSELLATION_CONTROL_SHADER_BIT;
+                    flags |= VK_PIPELINE_STAGE_TESSELLATION_EVALUATION_SHADER_BIT;
+                }*/
+                flags |= VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+#ifdef ENABLE_RAYTRACING
+                if (pRenderer->mVulkan.mRaytracingExtension)
+                {
+                    flags |= VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_NV;
+                }
+#endif
+            }
+            if ((accessFlags & VK_ACCESS_INPUT_ATTACHMENT_READ_BIT) != 0)
+                flags |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+
+            if ((accessFlags & (VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)) != 0)
+                flags |= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+            if ((accessFlags & (VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)) != 0)
+                flags |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+            break;
+        }
+        case GPU_QUEUE_TYPE_COMPUTE:
+        {
+            if ((accessFlags & (VK_ACCESS_INDEX_READ_BIT | VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT)) != 0 ||
+                (accessFlags & VK_ACCESS_INPUT_ATTACHMENT_READ_BIT) != 0 ||
+                (accessFlags & (VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)) != 0 ||
+                (accessFlags & (VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)) != 0)
+                return VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+
+            if ((accessFlags & (VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT)) != 0)
+                flags |= VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+
+            break;
+        }
+        case GPU_QUEUE_TYPE_TRANSFER: return VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+        default: break;
+        }
+        // Compatible with both compute and graphics queues
+        if ((accessFlags & VK_ACCESS_INDIRECT_COMMAND_READ_BIT) != 0)
+            flags |= VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT;
+
+        if ((accessFlags & (VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT)) != 0)
+            flags |= VK_PIPELINE_STAGE_TRANSFER_BIT;
+
+        if ((accessFlags & (VK_ACCESS_HOST_READ_BIT | VK_ACCESS_HOST_WRITE_BIT)) != 0)
+            flags |= VK_PIPELINE_STAGE_HOST_BIT;
+
+        if (flags == 0)
+            flags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+
+        return flags;
+    }
+
     static const char* intanceWantedExtensions[] = {
         VK_KHR_SURFACE_EXTENSION_NAME,
 #if defined(VK_USE_PLATFORM_WIN32_KHR)

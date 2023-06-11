@@ -63,6 +63,7 @@ extern "C" {
     void GPUFreeCommandBuffer_Vulkan(GPUCommandBufferID cmd);
     void GPUCmdBegin_Vulkan(GPUCommandBufferID cmdBuffer);
     void GPUCmdEnd_Vulkan(GPUCommandBufferID cmdBuffer);
+    void GPUCmdResourceBarrier_Vulkan(GPUCommandBufferID cmd, const GPUResourceBarrierDescriptor* desc);
 
     //fence & semaphore
     GPUFenceID GPUCreateFence_Vulkan(GPUDeviceID device);
@@ -227,6 +228,15 @@ extern "C" {
         VkRenderPass pPass;
         uint32_t type;
     } GPUCommandBuffer_Vulkan;
+
+    typedef struct GPUBuffer_Vulkan {
+        GPUBuffer super;
+        VkBuffer pVkBuffer;
+        VkBufferView pVkStorageTexelView;
+        VkBufferView pVkUniformTexelView;
+        struct VmaAllocation_T* pVkAllocation;
+        uint64_t mOffset;
+    } GPUBuffer_Vulkan;
 
     typedef struct GPUFence_Vulkan
     {

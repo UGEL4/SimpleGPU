@@ -950,7 +950,7 @@ extern "C" {
         uint32_t buffer_barriers_count;
         const GPUTextureBarrier* texture_barriers;
         uint32_t texture_barriers_count;
-    } CGPUResourceBarrierDescriptor;
+    } GPUResourceBarrierDescriptor;
 
 #ifdef __cplusplus
 }
