@@ -581,12 +581,12 @@ void GPUSubmitQueue_Vulkan(GPUQueueID queue, const struct GPUQueueSubmitDescript
     VkSubmitInfo info{};
     info.sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     info.waitSemaphoreCount   = waitCount;
-    info.pWaitSemaphores      = ppSignalSemaphore;
+    info.pWaitSemaphores      = waitCount ? ppSignalSemaphore : VK_NULL_HANDLE;
     info.pWaitDstStageMask    = 0;
     info.commandBufferCount   = cmdCount;
     info.pCommandBuffers      = cmds;
     info.signalSemaphoreCount = signalCount;
-    info.pSignalSemaphores    = ppWaitSemaphore;
+    info.pSignalSemaphores    = signalCount ? ppWaitSemaphore : VK_NULL_HANDLE;
 
     VkResult rs = D->mVkDeviceTable.vkQueueSubmit(Q->pQueue, 1, &info, F ? F->pVkFence : VK_NULL_HANDLE);
     if (rs != VK_SUCCESS)
