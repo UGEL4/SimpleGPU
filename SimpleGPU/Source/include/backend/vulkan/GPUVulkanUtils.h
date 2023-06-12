@@ -250,6 +250,38 @@ extern "C" {
         return flags;
     }
 
+    inline static VkImageAspectFlags VulkanUtil_DeterminAspectMask(VkFormat format, bool includeStencilBit)
+    {
+        VkImageAspectFlags result = 0;
+        switch (format)
+        {
+            // Depth
+            case VK_FORMAT_D16_UNORM:
+            case VK_FORMAT_X8_D24_UNORM_PACK32:
+            case VK_FORMAT_D32_SFLOAT:
+            result = VK_IMAGE_ASPECT_DEPTH_BIT;
+            break;
+            // Stencil
+            case VK_FORMAT_S8_UINT:
+            result = VK_IMAGE_ASPECT_STENCIL_BIT;
+            break;
+            // Depth/stencil
+            case VK_FORMAT_D16_UNORM_S8_UINT:
+            case VK_FORMAT_D24_UNORM_S8_UINT:
+            case VK_FORMAT_D32_SFLOAT_S8_UINT:
+            result = VK_IMAGE_ASPECT_DEPTH_BIT;
+            if (includeStencilBit)
+                result |= VK_IMAGE_ASPECT_STENCIL_BIT;
+            break;
+            // Assume everything else is Color
+            default:
+            result = VK_IMAGE_ASPECT_COLOR_BIT;
+            break;
+        }
+        return result;
+    }
+
+
     static const char* intanceWantedExtensions[] = {
         VK_KHR_SURFACE_EXTENSION_NAME,
 #if defined(VK_USE_PLATFORM_WIN32_KHR)

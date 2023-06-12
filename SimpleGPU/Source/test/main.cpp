@@ -112,7 +112,7 @@ int main(int argc, char** argv)
     swapchainDesc.ppPresentQueues    = &pGraphicQueue;
     swapchainDesc.presentQueuesCount = 1;
     swapchainDesc.pSurface           = pSurface;
-    swapchainDesc.format             = EGPUFormat::GPU_FORMAT_B8G8R8A8_SRGB;
+    swapchainDesc.format             = EGPUFormat::GPU_FORMAT_B8G8R8A8_UNORM;
     swapchainDesc.width              = 1280;
     swapchainDesc.height             = 720;
     swapchainDesc.imageCount         = 3;
@@ -184,9 +184,76 @@ int main(int argc, char** argv)
     GPUCommandBufferDescriptor cmdDesc{};
     cmdDesc.isSecondary = false;
     GPUCommandBufferID cmd = GPUCreateCommandBuffer(pool, &cmdDesc);
-    GPUWaitFences(&presenFence, 1);
+    uint32_t backbufferIndex = 0;
+    while (true)
+    {
+        GPUWaitFences(&presenFence, 1);
+
+        GPUAcquireNextDescriptor acq_desc{};
+        acq_desc.fence  = presenFence;
+        backbufferIndex = GPUAcquireNextImage(pSwapchain, &acq_desc);
+        GPUTextureID backbuffer          = pSwapchain->ppBackBuffers[backbufferIndex];
+        GPUTextureViewID backbuffer_view = ppSwapchainImage[backbufferIndex];
+
+        GPUResetCommandPool(pool);
+        GPUCmdBegin(cmd);
+        {
+            GPUTextureBarrier tex_barrier{};
+            tex_barrier.texture   = backbuffer;
+            tex_barrier.src_state = GPU_RESOURCE_STATE_UNDEFINED;
+            tex_barrier.dst_state = GPU_RESOURCE_STATE_RENDER_TARGET;
+            GPUResourceBarrierDescriptor draw_barrier{};
+            draw_barrier.texture_barriers      = &tex_barrier;
+            draw_barrier.texture_barriers_count = 1;
+            GPUCmdResourceBarrier(cmd, &draw_barrier);
+
+            GPUColorAttachment screenAttachment{};
+            screenAttachment.view         = backbuffer_view;
+            screenAttachment.load_action  = GPU_LOAD_ACTION_CLEAR;
+            screenAttachment.store_action = GPU_STORE_ACTION_STORE;
+            screenAttachment.clear_color  = { { 0.f, 0.f, 0.f, 0.f } };
+            GPURenderPassDescriptor render_pass_desc{};
+            render_pass_desc.sample_count        = GPU_SAMPLE_COUNT_1;
+            render_pass_desc.color_attachments   = &screenAttachment;
+            render_pass_desc.render_target_count = 1;
+            GPURenderPassEncoderID encoder = GPUCmdBeginRenderPass(cmd, &render_pass_desc);
+            {
+                GPURenderEncoderSetViewport(encoder, 0.f, 0.f, (float)backbuffer->width,
+                                            (float)backbuffer->height, 0.f, 1.f);
+                GPURenderEncoderSetScissor(encoder, 0, 0, backbuffer->width,
+                                           backbuffer->height);
+                GPURenderEncoderBindPipeline(encoder, pipeline);
+                GPURenderEncoderDraw(encoder, 3, 0);
+            }
+            GPUCmdEndRenderPass(cmd, encoder);
+
+            GPUTextureBarrier tex_barrier1{};
+            tex_barrier1.texture   = backbuffer;
+            tex_barrier1.src_state = GPU_RESOURCE_STATE_RENDER_TARGET;
+            tex_barrier1.dst_state = GPU_RESOURCE_STATE_PRESENT;
+            GPUResourceBarrierDescriptor present_barrier{};
+            present_barrier.texture_barriers_count = 1;
+            present_barrier.texture_barriers       = &tex_barrier1;
+            GPUCmdResourceBarrier(cmd, &present_barrier);
+
+        }
+        GPUCmdEnd(cmd);
+
+        //submit
+        GPUQueueSubmitDescriptor submitDesc{};
+        submitDesc.cmds = &cmd;
+        submitDesc.cmds_count = 1;
+        GPUSubmitQueue(pGraphicQueue, &submitDesc);
+        //present
+        GPUWaitQueueIdle(pGraphicQueue);
+        GPUQueuePresentDescriptor presentDesc{};
+        presentDesc.swapchain = pSwapchain;
+        presentDesc.index     = backbufferIndex;
+        GPUQueuePresent(pGraphicQueue, &presentDesc);
+    }
     //render loop end
 
+    GPUWaitQueueIdle(pGraphicQueue);
     GPUWaitFences(&presenFence, 1);
     GPUFreeFence(presenFence);
     for (uint32_t i = 0; i < pSwapchain->backBuffersCount; i++)

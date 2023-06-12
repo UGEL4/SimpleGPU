@@ -96,6 +96,30 @@ GPUQueueID GPUGetQueue(GPUDeviceID pDevice, EGPUQueueType queueType, uint32_t qu
     return pQueue;
 }
 
+void GPUSubmitQueue(GPUQueueID queue, const struct GPUQueueSubmitDescriptor* desc)
+{
+    assert(queue);
+    assert(queue->pDevice);
+    assert(queue->pDevice->pProcTableCache->SubmitQueue);
+    queue->pDevice->pProcTableCache->SubmitQueue(queue, desc);
+}
+
+void GPUWaitQueueIdle(GPUQueueID queue)
+{
+    assert(queue);
+    assert(queue->pDevice);
+    assert(queue->pDevice->pProcTableCache->WaitQueueIdle);
+    queue->pDevice->pProcTableCache->WaitQueueIdle(queue);
+}
+
+void GPUQueuePresent(GPUQueueID queue, const struct GPUQueuePresentDescriptor* desc)
+{
+    assert(queue);
+    assert(queue->pDevice);
+    assert(queue->pDevice->pProcTableCache->QueuePresent);
+    queue->pDevice->pProcTableCache->QueuePresent(queue, desc);
+}
+
 GPUSurfaceID GPUCreateSurfaceFromNativeView(GPUInstanceID pInstance, void* view)
 {
 #if defined(_WIN64)
@@ -322,6 +346,14 @@ void GPUCmdEnd(GPUCommandBufferID cmdBuffer)
     cmdBuffer->device->pProcTableCache->CmdEnd(cmdBuffer);
 }
 
+void GPUCmdResourceBarrier(GPUCommandBufferID cmd, const struct GPUResourceBarrierDescriptor* desc)
+{
+    assert(cmd);
+    assert(cmd->device);
+    assert(cmd->device->pProcTableCache->CmdResourceBarrier);
+    cmd->device->pProcTableCache->CmdResourceBarrier(cmd, desc);
+}
+
 GPUFenceID GPUCreateFence(GPUDeviceID device)
 {
     assert(device);
@@ -372,4 +404,58 @@ void GPUFreeSemaphore(GPUSemaphoreID semaphore)
     assert(semaphore->device);
     assert(semaphore->device->pProcTableCache->FreeSemaphore);
     semaphore->device->pProcTableCache->FreeSemaphore(semaphore);
+}
+
+GPURenderPassEncoderID GPUCmdBeginRenderPass(GPUCommandBufferID cmd, const struct GPURenderPassDescriptor* desc)
+{
+    assert(cmd);
+    assert(cmd->device);
+    assert(cmd->device->pProcTableCache->CmdBeginRenderPass);
+    GPURenderPassEncoderID id = cmd->device->pProcTableCache->CmdBeginRenderPass(cmd, desc);
+    GPUCommandBuffer* b       = (GPUCommandBuffer*)cmd;
+    b->currentDispatch        = GPU_PIPELINE_TYPE_GRAPHICS;
+    return id;
+}
+
+void GPUCmdEndRenderPass(GPUCommandBufferID cmd, GPURenderPassEncoderID encoder)
+{
+    assert(cmd);
+    assert(cmd->device);
+    assert(cmd->device->pProcTableCache->CmdEndRenderPass);
+    assert(cmd->currentDispatch == GPU_PIPELINE_TYPE_GRAPHICS);
+    cmd->device->pProcTableCache->CmdEndRenderPass(cmd, encoder);
+    GPUCommandBuffer* b = (GPUCommandBuffer*)cmd;
+    b->currentDispatch  = GPU_PIPELINE_TYPE_NONE;
+}
+
+void GPURenderEncoderSetViewport(GPURenderPassEncoderID encoder, float x, float y, float width, float height, float min_depth, float max_depth)
+{
+    GPUDeviceID D = encoder->device;
+    assert(D);
+    assert(D->pProcTableCache->RenderEncoderSetViewport);
+    D->pProcTableCache->RenderEncoderSetViewport(encoder, x, y, width, height, min_depth, max_depth);
+}
+
+void GPURenderEncoderSetScissor(GPURenderPassEncoderID encoder, uint32_t x, uint32_t y, uint32_t width, uint32_t height)
+{
+    GPUDeviceID D = encoder->device;
+    assert(D);
+    assert(D->pProcTableCache->RenderEncoderSetScissor);
+    D->pProcTableCache->RenderEncoderSetScissor(encoder, x, y, width, height);
+}
+
+void GPURenderEncoderBindPipeline(GPURenderPassEncoderID encoder, GPURenderPipelineID pipeline)
+{
+    GPUDeviceID D = encoder->device;
+    assert(D);
+    assert(D->pProcTableCache->RenderEncoderBindPipeline);
+    D->pProcTableCache->RenderEncoderBindPipeline(encoder, pipeline);
+}
+
+void GPURenderEncoderDraw(GPURenderPassEncoderID encoder, uint32_t vertex_count, uint32_t first_vertex)
+{
+    GPUDeviceID D = encoder->device;
+    assert(D);
+    assert(D->pProcTableCache->RenderEncoderDraw);
+    D->pProcTableCache->RenderEncoderDraw(encoder, vertex_count, first_vertex);
 }

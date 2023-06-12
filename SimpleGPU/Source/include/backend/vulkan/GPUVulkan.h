@@ -28,9 +28,13 @@ extern "C" {
 	//device api
     GPUDeviceID CreateDevice_Vulkan(GPUAdapterID pAdapter, const GPUDeviceDescriptor* pDesc);
     void FreeDevice_Vulkan(GPUDeviceID pDevice);
+
+    //queue
     uint32_t QueryQueueCount_Vulkan(const GPUAdapterID pAdapter, const EGPUQueueType queueType);
     GPUQueueID GetQueue_Vulkan(GPUDeviceID pDevice, EGPUQueueType queueType, uint32_t queueIndex);
-
+    void GPUSubmitQueue_Vulkan(GPUQueueID queue, const struct GPUQueueSubmitDescriptor* desc);
+    void GPUWaitQueueIdle_Vulkan(GPUQueueID queue);
+    void GPUQueuePresent_Vulkan(GPUQueueID queue, const struct GPUQueuePresentDescriptor* desc);
 	//swapchain
     GPUSwapchainID GPUCreateSwapchain_Vulkan(GPUDeviceID pDevice, GPUSwapchainDescriptor* pDesc);
     void GPUFreeSwapchain_Vulkan(GPUSwapchainID pSwapchain);
@@ -72,6 +76,14 @@ extern "C" {
     EGPUFenceStatus GPUQueryFenceStatus_Vulkan(GPUFenceID fence);
     GPUSemaphoreID GPUCreateSemaphore_Vulkan(GPUDeviceID device);
     void GPUFreeSemaphore_Vulkan(GPUSemaphoreID semaphore);
+
+    //render pass
+    GPURenderPassEncoderID GPUCmdBeginRenderPass_Vulkan(GPUCommandBufferID cmd, const struct GPURenderPassDescriptor* desc);
+    void GPUCmdEndRenderPass_Vulkan(GPUCommandBufferID cmd, GPURenderPassEncoderID encoder);
+    void GPURenderEncoderSetViewport_Vulkan(GPURenderPassEncoderID encoder, float x, float y, float width, float height, float min_depth, float max_depth);
+    void GPURenderEncoderSetScissor_Vulkan(GPURenderPassEncoderID encoder, uint32_t x, uint32_t y, uint32_t width, uint32_t height);
+    void GPURenderEncoderBindPipeline_Vulkan(GPURenderPassEncoderID encoder, GPURenderPipelineID pipeline);
+    void GPURenderEncoderDraw_Vulkan(GPURenderPassEncoderID encoder, uint32_t vertex_count, uint32_t first_vertex);
 
     typedef struct VkUtil_DescriptorPool
     {
@@ -167,7 +179,7 @@ extern "C" {
         VkImageView pVkRTVDSVDescriptor;
         VkImageView pVkSRVDescriptor;
         VkImageView pVkUAVDescriptor;
-    } GPUTextureView_vulkan;
+    } GPUTextureView_Vulkan;
 
     typedef struct GPUShaderLibrary_Vulkan
     {
@@ -251,6 +263,16 @@ extern "C" {
         VkSemaphore pVkSemaphore;
         uint8_t signaled : 1;
     } GPUSemaphore_Vulkan;
+
+    typedef struct VulkanFramebufferDesriptor
+    {
+        VkRenderPass pRenderPass;
+        uint32_t attachmentCount;
+        VkImageView pImageViews[GPU_MAX_MRT_COUNT+ 1];
+        uint32_t width;
+        uint32_t height;
+        uint32_t layers;
+    } VulkanFramebufferDesriptor;
 
 #ifdef __cplusplus
 }

@@ -36,6 +36,7 @@ DEFINE_GPU_OBJECT(GPUCommandBuffer)
 DEFINE_GPU_OBJECT(GPUFence)
 DEFINE_GPU_OBJECT(GPUSemaphore)
 DEFINE_GPU_OBJECT(GPUBuffer)
+DEFINE_GPU_OBJECT(GPURenderPassEncoder)
 
 #ifdef __cplusplus
 extern "C" {
@@ -279,8 +280,16 @@ extern "C" {
     typedef GPUDeviceID (*GPUProcCreateDevice)(GPUAdapterID pAdapter, const GPUDeviceDescriptor* pDesc);
     void GPUFreeDevice(GPUDeviceID pDevice);
     typedef void (*GPUProcFreeDevice)(GPUDeviceID pDevice);
+
+    //queue
     GPUQueueID GPUGetQueue(GPUDeviceID pDevice, EGPUQueueType queueType, uint32_t queueIndex);
     typedef GPUQueueID (*GPUProcGetQueue)(GPUDeviceID pDevice, EGPUQueueType queueType, uint32_t queueIndex);
+    void GPUSubmitQueue(GPUQueueID queue, const struct GPUQueueSubmitDescriptor* desc);
+    typedef void (*GPUProcSubmitQueue)(GPUQueueID queue, const struct GPUQueueSubmitDescriptor* desc);
+    void GPUWaitQueueIdle(GPUQueueID queue);
+    typedef void (*GPUProcWaitQueueIdle)(GPUQueueID queue);
+    void GPUQueuePresent(GPUQueueID queue, const struct GPUQueuePresentDescriptor* desc);
+    typedef void (*GPUProcQueuePresent)(GPUQueueID queue, const struct GPUQueuePresentDescriptor* desc);
 
 
 	// surface api
@@ -347,6 +356,8 @@ extern "C" {
     typedef void (*GPUProcCmdBegin)(GPUCommandBufferID cmdBuffer);
     void GPUCmdEnd(GPUCommandBufferID cmdBuffer);
     typedef void (*GPUProcCmdEnd)(GPUCommandBufferID cmdBuffer);
+    void GPUCmdResourceBarrier(GPUCommandBufferID cmd, const struct GPUResourceBarrierDescriptor* desc);
+    typedef void (*GPUProcCmdResourceBarrier)(GPUCommandBufferID cmd, const struct GPUResourceBarrierDescriptor* desc);
 
     //fence & semaphore
     GPUFenceID GPUCreateFence(GPUDeviceID device);
@@ -362,6 +373,19 @@ extern "C" {
     void GPUFreeSemaphore(GPUSemaphoreID semaphore);
     typedef void (*GPUProcFreeSemaphore)(GPUSemaphoreID semaphore);
 
+    GPURenderPassEncoderID GPUCmdBeginRenderPass(GPUCommandBufferID cmd, const struct GPURenderPassDescriptor* desc);
+    typedef GPURenderPassEncoderID (*GPUProcCmdBeginRenderPass)(GPUCommandBufferID cmd, const struct GPURenderPassDescriptor* desc);
+    void GPUCmdEndRenderPass(GPUCommandBufferID cmd, GPURenderPassEncoderID encoder);
+    typedef void (*GPUProcCmdEndRenderPass)(GPUCommandBufferID cmd, GPURenderPassEncoderID encoder);
+    void GPURenderEncoderSetViewport(GPURenderPassEncoderID encoder, float x, float y, float width, float height, float min_depth, float max_depth);
+    typedef void (*GPUProcRenderEncoderSetViewport)(GPURenderPassEncoderID encoder, float x, float y, float width, float height, float min_depth, float max_depth);
+    void GPURenderEncoderSetScissor(GPURenderPassEncoderID encoder, uint32_t x, uint32_t y, uint32_t width, uint32_t height);
+    typedef void (*GPUProcRenderEncoderSetScissor)(GPURenderPassEncoderID encoder, uint32_t x, uint32_t y, uint32_t width, uint32_t height);
+    void GPURenderEncoderBindPipeline(GPURenderPassEncoderID encoder, GPURenderPipelineID pipeline);
+    typedef void (*GPUProcRenderEncoderBindPipeline)(GPURenderPassEncoderID encoder, GPURenderPipelineID pipeline);
+    void GPURenderEncoderDraw(GPURenderPassEncoderID encoder, uint32_t vertex_count, uint32_t first_vertex);
+    typedef void (*GPUProcRenderEncoderDraw)(GPURenderPassEncoderID encoder, uint32_t vertex_count, uint32_t first_vertex);
+
 
 	typedef struct GPUProcTable
 	{
@@ -375,7 +399,12 @@ extern "C" {
         // device api
         const GPUProcCreateDevice CreateDevice;
         const GPUProcFreeDevice FreeDevice;
+
+        //queue
         const GPUProcGetQueue GetQueue;
+        const GPUProcSubmitQueue SubmitQueue;
+        const GPUProcWaitQueueIdle WaitQueueIdle;
+        const GPUProcQueuePresent QueuePresent;
 
         // swapchain api
         const GPUProcCreateSwapchain CreateSwapchain;
@@ -405,6 +434,7 @@ extern "C" {
         const GPUProcFreeCommandBuffer FreeCommandBuffer;
         const GPUProcCmdBegin CmdBegin;
         const GPUProcCmdEnd CmdEnd;
+        const GPUProcCmdResourceBarrier CmdResourceBarrier;
 
         //fence & semaphore
         const GPUProcCreateFence CreateFence;
@@ -413,6 +443,13 @@ extern "C" {
         const GPUProcQueryFenceStatus QueryFenceStatus;
         const GPUProcCreateSemaphore CreateSemaphore;
         const GPUProcFreeSemaphore FreeSemaphore;
+
+        const GPUProcCmdBeginRenderPass CmdBeginRenderPass;
+        const GPUProcCmdEndRenderPass CmdEndRenderPass;
+        const GPUProcRenderEncoderSetViewport RenderEncoderSetViewport;
+        const GPUProcRenderEncoderSetScissor RenderEncoderSetScissor;
+        const GPUProcRenderEncoderBindPipeline RenderEncoderBindPipeline;
+        const GPUProcRenderEncoderDraw RenderEncoderDraw;
 	}GPUProcTable;
 
 	typedef struct CGPUChainedDescriptor {
@@ -951,6 +988,29 @@ extern "C" {
         const GPUTextureBarrier* texture_barriers;
         uint32_t texture_barriers_count;
     } GPUResourceBarrierDescriptor;
+
+    typedef struct GPURenderPassEncoder {
+        GPUDeviceID device;
+    } GPURenderPassEncoder;
+
+    typedef struct GPUQueueSubmitDescriptor
+    {
+        GPUCommandBufferID* cmds;
+        GPUFenceID signal_fence;
+        GPUSemaphoreID* wait_semaphores;
+        GPUSemaphoreID* signal_semaphores;
+        uint32_t cmds_count;
+        uint32_t wait_semaphore_count;
+        uint32_t signal_semaphore_count;
+    } GPUQueueSubmitDescriptor;
+
+    typedef struct GPUQueuePresentDescriptor
+    {
+        GPUSwapchainID swapchain;
+        const GPUSemaphoreID* wait_semaphores;
+        uint32_t wait_semaphore_count;
+        uint8_t index;
+    } GPUQueuePresentDescriptor;
 
 #ifdef __cplusplus
 }

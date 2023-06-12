@@ -60,6 +60,9 @@ const GPUProcTable vkTable = {
     .CreateDevice         = &CreateDevice_Vulkan,
     .FreeDevice           = &FreeDevice_Vulkan,
     .GetQueue             = &GetQueue_Vulkan,
+    .SubmitQueue          = &GPUSubmitQueue_Vulkan,
+    .WaitQueueIdle        = &GPUWaitQueueIdle_Vulkan,
+    .QueuePresent         = &GPUQueuePresent_Vulkan,
     .CreateSwapchain      = &GPUCreateSwapchain_Vulkan,
     .FreeSwapchain        = &GPUFreeSwapchain_Vulkan,
     .AcquireNextImage     = &GPUAcquireNextImage_Vulkan,
@@ -78,12 +81,19 @@ const GPUProcTable vkTable = {
     .FreeCommandBuffer    = &GPUFreeCommandBuffer_Vulkan,
     .CmdBegin             = &GPUCmdBegin_Vulkan,
     .CmdEnd               = &GPUCmdEnd_Vulkan,
+    .CmdResourceBarrier   = &GPUCmdResourceBarrier_Vulkan,
     .CreateFence          = &GPUCreateFence_Vulkan,
     .FreeFence            = &GPUFreeFence_Vulkan,
     .WaitFences           = &GPUWaitFences_Vulkan,
     .QueryFenceStatus     = &GPUQueryFenceStatus_Vulkan,
     .CreateSemaphore      = &GPUCreateSemaphore_Vulkan,
-    .FreeSemaphore        = &GPUFreeSemaphore_Vulkan
+    .FreeSemaphore        = &GPUFreeSemaphore_Vulkan,
+    .CmdBeginRenderPass        = &GPUCmdBeginRenderPass_Vulkan,
+    .CmdEndRenderPass          = &GPUCmdEndRenderPass_Vulkan,
+    .RenderEncoderSetViewport  = &GPURenderEncoderSetViewport_Vulkan,
+    .RenderEncoderSetScissor   = &GPURenderEncoderSetScissor_Vulkan,
+    .RenderEncoderBindPipeline = &GPURenderEncoderBindPipeline_Vulkan,
+    .RenderEncoderDraw         = &GPURenderEncoderDraw_Vulkan
 };
 const GPUProcTable* GPUVulkanProcTable()
 {
@@ -136,25 +146,55 @@ bool operator==(const VulkanRenderPassDescriptor& a, const VulkanRenderPassDescr
     return std::memcmp(&a, &b, sizeof(VulkanRenderPassDescriptor)) == 0;
 }
 
+struct GPUCachedFrameBuffer
+{
+    VkFramebuffer pBuffer;
+};
+
+struct VulkanFramebufferDesriptorHasher {
+    size_t operator()(const VulkanFramebufferDesriptor& a) const
+    {
+        return hash_val(&a);
+    }
+
+    template <typename... types>
+    size_t hash_val(const types&... args) const
+    {
+        size_t seed = 0;
+        hash_val(seed, args...);
+        return seed;
+    }
+
+    template <typename T, typename... types>
+    void hash_val(size_t& seed, const T& firstArg, const types&... args) const
+    {
+        hash_combine(seed, firstArg);
+        hash_val(seed, args...);
+    }
+
+    template <typename T>
+    void hash_val(size_t& seed, const T& val) const
+    {
+        hash_combine(seed, val);
+    }
+
+    template <typename T>
+    void hash_combine(size_t& seed, const T& val) const
+    {
+        seed ^= std::hash<T>()(val) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+    }
+};
+
+bool operator==(const VulkanFramebufferDesriptor& a, const VulkanFramebufferDesriptor& b)
+{
+    if (a.attachmentCount != b.attachmentCount) return false;
+    return std::memcmp(&a, &b, sizeof(VulkanFramebufferDesriptor)) == 0;
+}
+
 struct GPUVkPassTable
 {
-    /*struct fbdesc_hash {
-        size_t operator()(const VkUtil_FramebufferDesc& a) const
-        {
-            return cgpu_hash(&a, sizeof(VkUtil_FramebufferDesc), CGPU_NAME_HASH_SEED);
-        }
-    };
-    struct fbdesc_eq {
-        inline bool operator()(const VkUtil_FramebufferDesc& a, const VkUtil_FramebufferDesc& b) const
-        {
-            if (a.pRenderPass != b.pRenderPass) return false;
-            if (a.mAttachmentCount != b.mAttachmentCount) return false;
-            return std::memcmp(&a, &b, sizeof(VkUtil_RenderPassDesc)) == 0;
-        }
-    };*/
-
     std::unordered_map<VulkanRenderPassDescriptor, GPUCachedRenderPass, VulkanRenderPassDescriptorHasher> cached_renderpasses;
-    //skr::flat_hash_map<VkUtil_FramebufferDesc, CGPUCachedFramebuffer, fbdesc_hash, fbdesc_eq> cached_framebuffers;
+    std::unordered_map<VulkanFramebufferDesriptor, GPUCachedFrameBuffer, VulkanFramebufferDesriptorHasher> cached_framebuffers;
 };
 
 GPUInstanceID CreateInstance_Vulkan(const GPUInstanceDescriptor* pDesc)
@@ -173,7 +213,7 @@ GPUInstanceID CreateInstance_Vulkan(const GPUInstanceDescriptor* pDesc)
     VkApplicationInfo appInfo{};
     appInfo.sType              = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     appInfo.pApplicationName   = "GPU";
-    appInfo.apiVersion         = VK_API_VERSION_1_1;
+    appInfo.apiVersion         = VK_API_VERSION_1_3;
     appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
     appInfo.pEngineName        = "No Engine";
     appInfo.engineVersion      = VK_MAKE_VERSION(1, 0, 0);
@@ -407,6 +447,26 @@ void VulkanUtil_RenderPassTableAdd(struct GPUVkPassTable* table, const struct Vu
     table->cached_renderpasses[*desc] = new_pass;
 }
 
+VkFramebuffer VulkanUtil_FrameBufferTableTryFind(struct GPUVkPassTable* table, const struct VulkanFramebufferDesriptor* desc)
+{
+    auto iter = table->cached_framebuffers.find(*desc);
+    if (iter != table->cached_framebuffers.end())
+    {
+        return iter->second.pBuffer;
+    }
+    return VK_NULL_HANDLE;
+}
+
+void VulkanUtil_FrameBufferTableAdd(struct GPUVkPassTable* table, const struct VulkanFramebufferDesriptor* desc, VkFramebuffer framebuffer)
+{
+    const auto& iter = table->cached_framebuffers.find(*desc);
+    if (iter != table->cached_framebuffers.end())
+    {
+    }
+    GPUCachedFrameBuffer new_framebuffer = { framebuffer};
+    table->cached_framebuffers[*desc]    = new_framebuffer;
+}
+
 uint32_t QueryQueueCount_Vulkan(const GPUAdapterID pAdapter, const EGPUQueueType queueType)
 {
     const GPUAdapter_Vulkan* ptr = (const GPUAdapter_Vulkan*)pAdapter;
@@ -477,6 +537,116 @@ GPUQueueID GetQueue_Vulkan(GPUDeviceID pDevice, EGPUQueueType queueType, uint32_
     pVkQueue->queueFamilyIndex = (uint32_t)pVkAdapter->queueFamilyIndices[queueType];
 
     return &pVkQueue->super;
+}
+
+void GPUSubmitQueue_Vulkan(GPUQueueID queue, const struct GPUQueueSubmitDescriptor* desc)
+{
+    GPUQueue_Vulkan* Q  = (GPUQueue_Vulkan*)queue;
+    GPUDevice_Vulkan* D = (GPUDevice_Vulkan*)queue->pDevice;
+    GPUFence_Vulkan* F  = (GPUFence_Vulkan*)desc->signal_fence;
+    uint32_t cmdCount   = desc->cmds_count;
+    GPUCommandBuffer_Vulkan** vkCmds = (GPUCommandBuffer_Vulkan**)desc->cmds;
+    DECLEAR_ZERO_VAL(VkCommandBuffer, cmds, cmdCount);
+    for (uint32_t i = 0; i < cmdCount; i++)
+    {
+        cmds[i] = vkCmds[i]->pVkCmd;
+    }
+
+    GPUSemaphore_Vulkan** vkSemaphores = (GPUSemaphore_Vulkan**)desc->wait_semaphores;
+    DECLEAR_ZERO_VAL(VkSemaphore, ppWaitSemaphore, desc->wait_semaphore_count + 1);
+    uint32_t waitCount = 0;
+    for (uint32_t i = 0; i < desc->wait_semaphore_count; i++)
+    {
+        if (vkSemaphores[i]->signaled)
+        {
+            ppWaitSemaphore[waitCount] = vkSemaphores[i]->pVkSemaphore;
+            vkSemaphores[i]->signaled  = false;
+            waitCount++;
+        }
+    }
+
+    GPUSemaphore_Vulkan** vkSignalSemaphores = (GPUSemaphore_Vulkan**)desc->signal_semaphores;
+    DECLEAR_ZERO_VAL(VkSemaphore, ppSignalSemaphore, desc->signal_semaphore_count + 1);
+    uint32_t signalCount = 0;
+    for (uint32_t i = 0; i < desc->signal_semaphore_count; i++)
+    {
+        if (!vkSignalSemaphores[i]->signaled)
+        {
+            ppSignalSemaphore[signalCount] = vkSignalSemaphores[i]->pVkSemaphore;
+            vkSemaphores[i]->signaled    = true;
+            signalCount++;
+        }
+    }
+
+    VkSubmitInfo info{};
+    info.sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    info.waitSemaphoreCount   = waitCount;
+    info.pWaitSemaphores      = ppSignalSemaphore;
+    info.pWaitDstStageMask    = 0;
+    info.commandBufferCount   = cmdCount;
+    info.pCommandBuffers      = cmds;
+    info.signalSemaphoreCount = signalCount;
+    info.pSignalSemaphores    = ppWaitSemaphore;
+
+    VkResult rs = D->mVkDeviceTable.vkQueueSubmit(Q->pQueue, 1, &info, F ? F->pVkFence : VK_NULL_HANDLE);
+    if (rs != VK_SUCCESS)
+    {
+        if (rs == VK_ERROR_DEVICE_LOST)
+        {
+        }
+        else
+        {
+            assert(0);
+        }
+    }
+    if (F) F->submitted = true;
+}
+
+void GPUWaitQueueIdle_Vulkan(GPUQueueID queue)
+{
+    GPUQueue_Vulkan* Q  = (GPUQueue_Vulkan*)queue;
+    GPUDevice_Vulkan* D = (GPUDevice_Vulkan*)queue->pDevice;
+    D->mVkDeviceTable.vkQueueWaitIdle(Q->pQueue);
+}
+
+void GPUQueuePresent_Vulkan(GPUQueueID queue, const struct GPUQueuePresentDescriptor* desc)
+{
+    GPUQueue_Vulkan* Q     = (GPUQueue_Vulkan*)queue;
+    GPUDevice_Vulkan* D    = (GPUDevice_Vulkan*)queue->pDevice;
+    GPUSwapchain_Vulkan* S = (GPUSwapchain_Vulkan*)desc->swapchain;
+
+    if (S)
+    {
+        uint32_t waitCount = 0;
+        DECLEAR_ZERO_VAL(VkSemaphore, ppSemaphores, desc->wait_semaphore_count + 1);
+        GPUSemaphore_Vulkan** vkSemaphores = (GPUSemaphore_Vulkan**)desc->wait_semaphores;
+        for (uint32_t i = 0; i < desc->wait_semaphore_count; i++)
+        {
+            if (vkSemaphores[i]->signaled)
+            {
+                ppSemaphores[waitCount]   = vkSemaphores[i]->pVkSemaphore;
+                vkSemaphores[i]->signaled = false;
+                waitCount++;
+            }
+        }
+
+        uint32_t presentIndex = desc->index;
+        VkPresentInfoKHR info{};
+        info.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        info.waitSemaphoreCount = waitCount;
+        info.pWaitSemaphores    = ppSemaphores;
+        info.swapchainCount     = 1;
+        info.pSwapchains        = &S->pVkSwapchain;
+        info.pImageIndices      = &presentIndex;
+        info.pResults           = VK_NULL_HANDLE;
+
+        VkResult rs = D->mVkDeviceTable.vkQueuePresentKHR(Q->pQueue, &info);
+        if (rs != VK_SUCCESS && rs != VK_SUBOPTIMAL_KHR &&
+            rs != VK_ERROR_OUT_OF_DATE_KHR)
+        {
+            assert(0 && "Present failed!");
+        }
+    }
 }
 
 GPUSwapchainID GPUCreateSwapchain_Vulkan(GPUDeviceID pDevice, GPUSwapchainDescriptor* pDesc)
@@ -692,7 +862,7 @@ GPUSwapchainID GPUCreateSwapchain_Vulkan(GPUDeviceID pDevice, GPUSwapchainDescri
         pTex[i].super.pDevice           = &pVkDevice->spuer;
         pTex[i].super.sampleCount       = GPU_SAMPLE_COUNT_1; // TODO: ?
         pTex[i].super.format            = GPUVulkanFormatToGPUFormat(surfaceFormat.format);
-        // pTex[i].super.aspectMask = VkUtil_DeterminAspectMask(Ts[i].super.format, false);
+        pTex[i].super.aspectMask        = VulkanUtil_DeterminAspectMask((VkFormat)pTex[i].super.format, false);
         pTex[i].super.depth     = 1;
         pTex[i].super.width     = extent.width;
         pTex[i].super.height    = extent.height;
@@ -907,7 +1077,7 @@ void GPUFreeShaderLibrary_Vulkan(GPUShaderLibraryID pShader)
     GPU_SAFE_FREE(pVkShader);
 }
 
-static void CreateRenderPass(const GPUDevice_Vulkan* pDevice, const VulkanRenderPassDescriptor* pDesc, VkRenderPass* pVkPass)
+static void FindOrCreateRenderPass(const GPUDevice_Vulkan* pDevice, const VulkanRenderPassDescriptor* pDesc, VkRenderPass* pVkPass)
 {
     VkRenderPass found = VulkanUtil_RenderPassTableTryFind(pDevice->pPassTable, pDesc);
     if (found != VK_NULL_HANDLE)
@@ -972,6 +1142,30 @@ static void CreateRenderPass(const GPUDevice_Vulkan* pDevice, const VulkanRender
     VkResult rs = pDevice->mVkDeviceTable.vkCreateRenderPass(pDevice->pDevice, &createInfo, GLOBAL_VkAllocationCallbacks, pVkPass);
     assert(rs == VK_SUCCESS);
     VulkanUtil_RenderPassTableAdd(pDevice->pPassTable, pDesc, *pVkPass);
+}
+
+static void FindOrCreateFrameBuffer(const GPUDevice_Vulkan* D, const struct VulkanFramebufferDesriptor* pDesc, VkFramebuffer* ppFramebuffer)
+{
+    VkFramebuffer found = VulkanUtil_FrameBufferTableTryFind(D->pPassTable, pDesc);
+    if (found != VK_NULL_HANDLE)
+    {
+        *ppFramebuffer = found;
+        return;
+    }
+    assert(VK_NULL_HANDLE != D->pDevice);
+    VkFramebufferCreateInfo add_info = {
+        .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+        .pNext           = NULL,
+        .flags           = 0,
+        .renderPass      = pDesc->pRenderPass,
+        .attachmentCount = pDesc->attachmentCount,
+        .pAttachments    = pDesc->pImageViews,
+        .width           = pDesc->width,
+        .height          = pDesc->height,
+        .layers          = pDesc->layers
+    };
+    assert(vkCreateFramebuffer(D->pDevice, &add_info, GLOBAL_VkAllocationCallbacks, ppFramebuffer) == VK_SUCCESS);
+    VulkanUtil_FrameBufferTableAdd(D->pPassTable, pDesc, *ppFramebuffer);
 }
 
 GPURenderPipelineID GPUCreateRenderPipeline_Vulkan(GPUDeviceID pDevice, const GPURenderPipelineDescriptor* pDesc)
@@ -1180,7 +1374,7 @@ GPURenderPipelineID GPUCreateRenderPipeline_Vulkan(GPUDeviceID pDevice, const GP
     {
         renderPassDesc.pColorFormat[i] = pDesc->pColorFormats[i];
     }
-    CreateRenderPass(pVkDevice, &renderPassDesc, &pRenderPass);
+    FindOrCreateRenderPass(pVkDevice, &renderPassDesc, &pRenderPass);
     VkGraphicsPipelineCreateInfo pipelineCreateInfo{};
     pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     pipelineCreateInfo.stageCount = shaderStagCount;
@@ -2018,4 +2212,140 @@ void GPUFreeSemaphore_Vulkan(GPUSemaphoreID semaphore)
     GPUSemaphore_Vulkan* S = (GPUSemaphore_Vulkan*)semaphore;
     D->mVkDeviceTable.vkDestroySemaphore(D->pDevice, S->pVkSemaphore, GLOBAL_VkAllocationCallbacks);
     GPU_SAFE_FREE(S);
+}
+
+GPURenderPassEncoderID GPUCmdBeginRenderPass_Vulkan(GPUCommandBufferID cmd, const struct GPURenderPassDescriptor* desc)
+{
+    GPUDevice_Vulkan* D          = (GPUDevice_Vulkan*)cmd->device;
+    GPUCommandBuffer_Vulkan* CMD = (GPUCommandBuffer_Vulkan*)cmd;
+
+    uint32_t Width, Height;
+    VkRenderPass render_pass = VK_NULL_HANDLE;
+    VulkanRenderPassDescriptor r_desc{};
+    r_desc.attachmentCount = desc->render_target_count;
+    for (uint32_t i = 0; i < desc->render_target_count; i++)
+    {
+        r_desc.pColorFormat[i]   = desc->color_attachments[i].view->desc.format;
+        r_desc.pColorLoadOps[i]  = desc->color_attachments[i].load_action;
+        r_desc.pColorStoreOps[i] = desc->color_attachments[i].store_action;
+        Width                    = desc->color_attachments[i].view->desc.pTexture->width;
+        Height                   = desc->color_attachments[i].view->desc.pTexture->height;
+    }
+    r_desc.depthFormat    = desc->depth_stencil ? (desc->depth_stencil->view ? desc->depth_stencil->view->desc.format : GPU_FORMAT_UNDEFINED) : GPU_FORMAT_UNDEFINED;
+    r_desc.sampleCount    = desc->sample_count;
+    r_desc.depthLoadOp    = desc->depth_stencil ? desc->depth_stencil->depth_load_action : GPU_LOAD_ACTION_DONTCARE;
+    r_desc.depthStoreOp   = desc->depth_stencil ? desc->depth_stencil->depth_store_action : GPU_STORE_ACTION_STORE;
+    r_desc.stencilLoadOp  = desc->depth_stencil ? desc->depth_stencil->stencil_load_action : GPU_LOAD_ACTION_DONTCARE;
+    r_desc.stencilStoreOp = desc->depth_stencil ? desc->depth_stencil->stencil_store_action : GPU_STORE_ACTION_STORE;
+    FindOrCreateRenderPass(D, &r_desc, &render_pass);
+
+    VkFramebuffer framebuffer = VK_NULL_HANDLE;
+    VulkanFramebufferDesriptor fb_desc{};
+    fb_desc.pRenderPass     = render_pass;
+    fb_desc.width           = Width;
+    fb_desc.height          = Height;
+    fb_desc.layers          = 1;
+    uint32_t idx            = 0;
+    for (uint32_t i = 0; i < desc->render_target_count; i++)
+    {
+        GPUTextureView_Vulkan* view = (GPUTextureView_Vulkan*)desc->color_attachments[i].view;
+        fb_desc.pImageViews[idx]    = view->pVkRTVDSVDescriptor;
+        fb_desc.layers              = view->super.desc.arrayLayerCount;
+        fb_desc.attachmentCount    += 1;
+        idx++;
+    }
+    if (desc->depth_stencil != VK_NULL_HANDLE && desc->depth_stencil->view != VK_NULL_HANDLE)
+    {
+        GPUTextureView_Vulkan* view = (GPUTextureView_Vulkan*)desc->depth_stencil->view;
+        fb_desc.pImageViews[idx]    = view->pVkRTVDSVDescriptor;
+        fb_desc.layers              = view->super.desc.arrayLayerCount;
+        fb_desc.attachmentCount    += 1;
+        idx++;
+    }
+    if (desc->render_target_count)
+        assert(fb_desc.layers == 1 && "MRT pass supports only one layer!");
+    FindOrCreateFrameBuffer(D, &fb_desc, &framebuffer);
+
+    VkRect2D renderArea{};
+    renderArea.extent.width  = Width;
+    renderArea.extent.height = Height;
+    renderArea.offset.x      = 0;
+    renderArea.offset.y      = 0;
+
+    VkClearValue pClearValues[GPU_MAX_MRT_COUNT + 1] = {};
+    idx                                              = 0;
+    for (uint32_t i = 0; i < desc->render_target_count; i++)
+    {
+        const GPUClearValue* clearValue    = &desc->color_attachments[i].clear_color;
+        pClearValues[idx].color.float32[0] = clearValue->r;
+        pClearValues[idx].color.float32[1] = clearValue->g;
+        pClearValues[idx].color.float32[2] = clearValue->b;
+        pClearValues[idx].color.float32[3] = clearValue->a;
+        idx++;
+    }
+    if (desc->depth_stencil != VK_NULL_HANDLE && desc->depth_stencil->view != VK_NULL_HANDLE)
+    {
+        pClearValues[idx].depthStencil.depth   = desc->depth_stencil->clear_depth;
+        pClearValues[idx].depthStencil.stencil = desc->depth_stencil->clear_stencil;
+        idx++;
+    }
+
+    VkRenderPassBeginInfo beginInfo{};
+    beginInfo.sType           = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    beginInfo.renderPass      = render_pass;
+    beginInfo.framebuffer     = framebuffer;
+    beginInfo.renderArea      = renderArea;
+    beginInfo.clearValueCount = idx;
+    beginInfo.pClearValues    = pClearValues;
+
+    D->mVkDeviceTable.vkCmdBeginRenderPass(CMD->pVkCmd, &beginInfo, VK_SUBPASS_CONTENTS_INLINE);
+    CMD->pPass = render_pass;
+    return (GPURenderPassEncoderID)cmd;
+}
+
+void GPUCmdEndRenderPass_Vulkan(GPUCommandBufferID cmd, GPURenderPassEncoderID encoder)
+{
+    GPUDevice_Vulkan* D          = (GPUDevice_Vulkan*)cmd->device;
+    GPUCommandBuffer_Vulkan* CMD = (GPUCommandBuffer_Vulkan*)cmd;
+    D->mVkDeviceTable.vkCmdEndRenderPass(CMD->pVkCmd);
+    CMD->pPass = VK_NULL_HANDLE;
+}
+
+void GPURenderEncoderSetViewport_Vulkan(GPURenderPassEncoderID encoder, float x, float y, float width, float height, float min_depth, float max_depth)
+{
+    GPUDevice_Vulkan* D          = (GPUDevice_Vulkan*)encoder->device;
+    GPUCommandBuffer_Vulkan* CMD = (GPUCommandBuffer_Vulkan*)encoder;
+    VkViewport viewport{};
+    viewport.x        = x;
+    viewport.y        = y;
+    viewport.width    = width;
+    viewport.height   = height;
+    viewport.minDepth = min_depth;
+    viewport.maxDepth = max_depth;
+    D->mVkDeviceTable.vkCmdSetViewport(CMD->pVkCmd, 0, 1, &viewport);
+}
+
+void GPURenderEncoderSetScissor_Vulkan(GPURenderPassEncoderID encoder, uint32_t x, uint32_t y, uint32_t width, uint32_t height)
+{
+    GPUDevice_Vulkan* D          = (GPUDevice_Vulkan*)encoder->device;
+    GPUCommandBuffer_Vulkan* CMD = (GPUCommandBuffer_Vulkan*)encoder;
+    VkRect2D scissor{};
+    scissor.offset = { (int32_t)x, (int32_t)y };
+    scissor.extent = { width, height };
+    D->mVkDeviceTable.vkCmdSetScissor(CMD->pVkCmd, 0, 1, &scissor);
+}
+
+void GPURenderEncoderBindPipeline_Vulkan(GPURenderPassEncoderID encoder, GPURenderPipelineID pipeline)
+{
+    GPUDevice_Vulkan* D          = (GPUDevice_Vulkan*)encoder->device;
+    GPUCommandBuffer_Vulkan* CMD = (GPUCommandBuffer_Vulkan*)encoder;
+    GPURenderPipeline_Vulkan* PP = (GPURenderPipeline_Vulkan*)pipeline;
+    D->mVkDeviceTable.vkCmdBindPipeline(CMD->pVkCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, PP->pPipeline);
+}
+
+void GPURenderEncoderDraw_Vulkan(GPURenderPassEncoderID encoder, uint32_t vertex_count, uint32_t first_vertex)
+{
+    GPUDevice_Vulkan* D          = (GPUDevice_Vulkan*)encoder->device;
+    GPUCommandBuffer_Vulkan* CMD = (GPUCommandBuffer_Vulkan*)encoder;
+    D->mVkDeviceTable.vkCmdDraw(CMD->pVkCmd, vertex_count, 1, first_vertex, 0);
 }
