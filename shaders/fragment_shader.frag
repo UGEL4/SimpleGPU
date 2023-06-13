@@ -9,7 +9,8 @@
 //layout(set = 0, binding = 4) uniform ubo2 {mat4 inputPosition;}uo2;
 
 layout(location=0) out vec4 outClor;
+layout(location = 0) in vec3 frColor;
 void main()
 {
-	outClor = vec4(1.0, 0.0, 0.0, 1.0);
+	outClor = vec4(frColor, 1.0);
 }
