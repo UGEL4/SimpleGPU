@@ -135,7 +135,6 @@ extern "C" {
         if (state & GPU_RESOURCE_STATE_PRESENT)
         {
             ret |= VK_ACCESS_MEMORY_READ_BIT;
-            ret |= VK_ACCESS_2_MEMORY_READ_BIT;
         }
 #ifdef ENABLE_RAYTRACING
         if (state & GPU_RESOURCE_STATE_ACCELERATION_STRUCTURE)

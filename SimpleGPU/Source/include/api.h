@@ -386,6 +386,9 @@ extern "C" {
     void GPURenderEncoderDraw(GPURenderPassEncoderID encoder, uint32_t vertex_count, uint32_t first_vertex);
     typedef void (*GPUProcRenderEncoderDraw)(GPURenderPassEncoderID encoder, uint32_t vertex_count, uint32_t first_vertex);
 
+    //buffer
+    GPUBufferID GPUCreateBuffer(GPUDeviceID device);
+    typedef GPUBufferID (*GPUProcCreateBuffer)(GPUDeviceID device);
 
 	typedef struct GPUProcTable
 	{
@@ -450,6 +453,9 @@ extern "C" {
         const GPUProcRenderEncoderSetScissor RenderEncoderSetScissor;
         const GPUProcRenderEncoderBindPipeline RenderEncoderBindPipeline;
         const GPUProcRenderEncoderDraw RenderEncoderDraw;
+
+        //buffer
+        const GPUProcCreateBuffer CreateBuffer;
 	}GPUProcTable;
 
 	typedef struct CGPUChainedDescriptor {

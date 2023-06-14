@@ -2080,6 +2080,8 @@ void GPUCmdResourceBarrier_Vulkan(GPUCommandBufferID cmd, const GPUResourceBarri
 
             pImageBarrier->srcAccessMask = VulkanUtil_ResourceStateToVkAccessFlags(texture_barrier->src_state);
             pImageBarrier->dstAccessMask = VulkanUtil_ResourceStateToVkAccessFlags(texture_barrier->dst_state);
+            if (texture_barrier->dst_state == GPU_RESOURCE_STATE_PRESENT)
+                pImageBarrier->dstAccessMask = VK_ACCESS_NONE; //PR table says "Must be 0"
             pImageBarrier->oldLayout = VulkanUtil_ResourceStateToImageLayout(texture_barrier->src_state);
             pImageBarrier->newLayout = VulkanUtil_ResourceStateToImageLayout(texture_barrier->dst_state);
         }
@@ -2348,4 +2350,20 @@ void GPURenderEncoderDraw_Vulkan(GPURenderPassEncoderID encoder, uint32_t vertex
     GPUDevice_Vulkan* D          = (GPUDevice_Vulkan*)encoder->device;
     GPUCommandBuffer_Vulkan* CMD = (GPUCommandBuffer_Vulkan*)encoder;
     D->mVkDeviceTable.vkCmdDraw(CMD->pVkCmd, vertex_count, 1, first_vertex, 0);
+}
+
+GPUBufferID GPUCreateBuffer(GPUDeviceID device)
+{
+    GPUDevice_Vulkan* D = (GPUDevice_Vulkan*)device;
+
+    // TODO: Align the buffer size to multiples of the dynamic uniform buffer minimum size
+
+    VkBufferCreateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    info.flags = 0;
+    info.size  = inSize;
+    info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    info.queueFamilyIndexCount = 0;
+    info.pQueueFamilyIndices   = nullptr;
 }

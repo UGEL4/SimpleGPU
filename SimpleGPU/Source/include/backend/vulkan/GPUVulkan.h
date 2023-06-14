@@ -85,6 +85,9 @@ extern "C" {
     void GPURenderEncoderBindPipeline_Vulkan(GPURenderPassEncoderID encoder, GPURenderPipelineID pipeline);
     void GPURenderEncoderDraw_Vulkan(GPURenderPassEncoderID encoder, uint32_t vertex_count, uint32_t first_vertex);
 
+    //buffer
+    GPUBufferID GPUCreateBuffer(GPUDeviceID device);
+
     typedef struct VkUtil_DescriptorPool
     {
         struct GPUDevice_Vulkan* Device;
