@@ -32,6 +32,7 @@ extern "C" {
     //queue
     uint32_t QueryQueueCount_Vulkan(const GPUAdapterID pAdapter, const EGPUQueueType queueType);
     GPUQueueID GetQueue_Vulkan(GPUDeviceID pDevice, EGPUQueueType queueType, uint32_t queueIndex);
+    void GPUFreeQueue_Vulkan(GPUQueueID queue);
     void GPUSubmitQueue_Vulkan(GPUQueueID queue, const struct GPUQueueSubmitDescriptor* desc);
     void GPUWaitQueueIdle_Vulkan(GPUQueueID queue);
     void GPUQueuePresent_Vulkan(GPUQueueID queue, const struct GPUQueuePresentDescriptor* desc);
@@ -86,7 +87,8 @@ extern "C" {
     void GPURenderEncoderDraw_Vulkan(GPURenderPassEncoderID encoder, uint32_t vertex_count, uint32_t first_vertex);
 
     //buffer
-    GPUBufferID GPUCreateBuffer(GPUDeviceID device);
+    GPUBufferID GPUCreateBuffer_Vulkan(GPUDeviceID device, const GPUBufferDescriptor* desc);
+    void GPUFreeBuffer_Vulkan(GPUBufferID buffer);
 
     typedef struct VkUtil_DescriptorPool
     {
@@ -144,6 +146,7 @@ extern "C" {
 		GPUAdapterDetail adapterDetail;
 	} GPUAdapter_Vulkan;
 
+    typedef struct VmaAllocator_T* VmaAllocator;
 	typedef struct GPUDevice_Vulkan
 	{
         GPUDevice spuer;
@@ -151,13 +154,17 @@ extern "C" {
         VkUtil_DescriptorPool* pDescriptorPool;
         struct VolkDeviceTable mVkDeviceTable;
         struct GPUVkPassTable* pPassTable;
+        VmaAllocator pVmaAllocator;
 	} GPUDevice_Vulkan;
 
 	typedef struct GPUQueue_Vulkan
 	{
         const GPUQueue super;
         VkQueue pQueue;
-        uint32_t queueFamilyIndex;
+        uint32_t queueFamilyIndex;// Cmd pool for inner usage like resource transition
+        GPUCommandPoolID pInnerCmdPool;
+        GPUCommandBufferID pInnerCmdBuffer;
+        GPUFenceID pInnerFence;
 	} GPUQueue_Vulkan;
 
 	typedef struct GPUSwapchain_Vulkan {
@@ -244,12 +251,13 @@ extern "C" {
         uint32_t type;
     } GPUCommandBuffer_Vulkan;
 
+    typedef struct VmaAllocation_T* VmaAllocation;
     typedef struct GPUBuffer_Vulkan {
         GPUBuffer super;
         VkBuffer pVkBuffer;
         VkBufferView pVkStorageTexelView;
         VkBufferView pVkUniformTexelView;
-        struct VmaAllocation_T* pVkAllocation;
+        VmaAllocation pVkAllocation;
         uint64_t mOffset;
     } GPUBuffer_Vulkan;
 

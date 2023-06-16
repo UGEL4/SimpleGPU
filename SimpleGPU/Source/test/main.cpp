@@ -279,6 +279,7 @@ int main(int argc, char** argv)
     GPUFreeRenderPipeline(pipeline);
     GPUFreeRootSignature(pRS);
     GPUFreeSwapchain(pSwapchain);
+    GPUFreeQueue(pGraphicQueue);
     GPUFreeDevice(device);
     GPUFreeSurface(pInstance, pSurface);
     GPUFreeInstance(pInstance);

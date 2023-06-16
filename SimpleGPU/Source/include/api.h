@@ -265,6 +265,49 @@ extern "C" {
         GPU_FENCE_STATUS_MAX_ENUM_BIT = 0x7FFFFFFF
     } EGPUFenceStatus;
 
+    typedef enum EGPUMemoryUsage
+    {
+        /// No intended memory usage specified.
+        GPU_MEM_USAGE_UNKNOWN = 0,
+        /// Memory will be used on device only, no need to be mapped on host.
+        GPU_MEM_USAGE_GPU_ONLY = 1,
+        /// Memory will be mapped on host. Could be used for transfer to device.
+        GPU_MEM_USAGE_CPU_ONLY = 2,
+        /// Memory will be used for frequent (dynamic) updates from host and reads on device.
+        /// Memory location (heap) is unsure.
+        GPU_MEM_USAGE_CPU_TO_GPU = 3,
+        /// Memory will be used for writing on device and readback on host.
+        /// Memory location (heap) is unsure.
+        GPU_MEM_USAGE_GPU_TO_CPU = 4,
+        GPU_MEM_USAGE_COUNT,
+        GPU_MEM_USAGE_MAX_ENUM = 0x7FFFFFFF
+    } EGPUMemoryUsage;
+
+    typedef enum EGPUBufferCreationFlag
+    {
+        /// Default flag (Buffer will use aliased memory, buffer will not be cpu accessible until mapBuffer is called)
+        GPU_BCF_NONE = 0,
+        /// Buffer will allocate its own memory (COMMITTED resource)
+        GPU_BCF_OWN_MEMORY_BIT = 0x02,
+        /// Buffer will be persistently mapped
+        GPU_BCF_PERSISTENT_MAP_BIT = 0x04,
+        /// Use ESRAM to store this buffer
+        GPU_BCF_ESRAM = 0x08,
+        /// Flag to specify not to allocate descriptors for the resource
+        GPU_BCF_NO_DESCRIPTOR_VIEW_CREATION = 0x10,
+        /// Flag to specify to create GPUOnly buffer as Host visible
+        GPU_BCF_HOST_VISIBLE = 0x20,
+#ifdef GPU_USE_METAL
+        /* ICB Flags */
+        /// Inherit pipeline in ICB
+        GPU_BCF_ICB_INHERIT_PIPELINE = 0x100,
+        /// Inherit pipeline in ICB
+        GPU_BCF_ICB_INHERIT_BUFFERS = 0x200,
+#endif
+        GPU_BCF_MAX_ENUM_BIT = 0x7FFFFFFF
+    } EGPUBufferCreationFlag;
+    typedef uint32_t CGPUBufferCreationFlags;
+
 	//instance api
 	GPUInstanceID GPUCreateInstance(const struct GPUInstanceDescriptor* pDesc);
 	typedef GPUInstanceID (*GPUProcCreateInstance)(const struct GPUInstanceDescriptor* pDesc);
@@ -284,6 +327,8 @@ extern "C" {
     //queue
     GPUQueueID GPUGetQueue(GPUDeviceID pDevice, EGPUQueueType queueType, uint32_t queueIndex);
     typedef GPUQueueID (*GPUProcGetQueue)(GPUDeviceID pDevice, EGPUQueueType queueType, uint32_t queueIndex);
+    void GPUFreeQueue(GPUQueueID queue);
+    typedef void (*GPUProcFreeQueue)(GPUQueueID queue);
     void GPUSubmitQueue(GPUQueueID queue, const struct GPUQueueSubmitDescriptor* desc);
     typedef void (*GPUProcSubmitQueue)(GPUQueueID queue, const struct GPUQueueSubmitDescriptor* desc);
     void GPUWaitQueueIdle(GPUQueueID queue);
@@ -387,8 +432,10 @@ extern "C" {
     typedef void (*GPUProcRenderEncoderDraw)(GPURenderPassEncoderID encoder, uint32_t vertex_count, uint32_t first_vertex);
 
     //buffer
-    GPUBufferID GPUCreateBuffer(GPUDeviceID device);
-    typedef GPUBufferID (*GPUProcCreateBuffer)(GPUDeviceID device);
+    GPUBufferID GPUCreateBuffer(GPUDeviceID device, const GPUBufferDescriptor* desc);
+    typedef GPUBufferID (*GPUProcCreateBuffer)(GPUDeviceID device, const GPUBufferDescriptor* desc);
+    void GPUFreeBuffer(GPUBufferID buffer);
+    typedef void (*GPUProcFreeBuffer)(GPUBufferID buffer);
 
 	typedef struct GPUProcTable
 	{
@@ -405,6 +452,7 @@ extern "C" {
 
         //queue
         const GPUProcGetQueue GetQueue;
+        const GPUProcFreeQueue FreeQueue;
         const GPUProcSubmitQueue SubmitQueue;
         const GPUProcWaitQueueIdle WaitQueueIdle;
         const GPUProcQueuePresent QueuePresent;
@@ -444,8 +492,8 @@ extern "C" {
         const GPUProcFreeFence FreeFence;
         const GPUProcWaitFences WaitFences;
         const GPUProcQueryFenceStatus QueryFenceStatus;
-        const GPUProcCreateSemaphore CreateSemaphore;
-        const GPUProcFreeSemaphore FreeSemaphore;
+        const GPUProcCreateSemaphore GpuCreateSemaphore;
+        const GPUProcFreeSemaphore GpuFreeSemaphore;
 
         const GPUProcCmdBeginRenderPass CmdBeginRenderPass;
         const GPUProcCmdEndRenderPass CmdEndRenderPass;
@@ -456,6 +504,7 @@ extern "C" {
 
         //buffer
         const GPUProcCreateBuffer CreateBuffer;
+        const GPUProcFreeBuffer FreeBuffer;
 	}GPUProcTable;
 
 	typedef struct CGPUChainedDescriptor {
@@ -962,6 +1011,20 @@ extern "C" {
         uint8_t d3d12_end_only;
     } GPUTextureBarrier;
 
+    typedef struct GPUBufferDescriptor
+    {
+        uint64_t size;
+        GPUResourceTypes descriptors; // bffer usage
+        /// Memory usage
+        /// Decides which memory heap buffer will use (default, upload, readback)
+        EGPUMemoryUsage memory_usage;
+        EGPUFormat format;
+        EGPUResourceState start_state;/// What state will the buffer get created in
+        CGPUBufferCreationFlags flags;
+        GPUQueueID owner_queue; /// Owner queue of the resource at creation
+        bool prefer_on_device;
+        bool prefer_on_host;
+    } GPUBufferDescriptor;
     typedef struct GPUBuffer
     {
         GPUDeviceID device;

@@ -378,6 +378,44 @@ extern "C" {
 #endif
     };
 
+    inline static VkBufferUsageFlags VulkanUtil_DescriptorTypesToBufferUsage(GPUResourceTypes descriptors, bool texel)
+    {
+        VkBufferUsageFlags result = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+        if (descriptors & GPU_RESOURCE_TYPE_UNIFORM_BUFFER)
+        {
+            result |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+        }
+        if (descriptors & GPU_RESOURCE_TYPE_RW_BUFFER)
+        {
+            result |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+            if (texel) result |= VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT;
+        }
+        if (descriptors & GPU_RESOURCE_TYPE_BUFFER)
+        {
+            result |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+            if (texel) result |= VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT;
+        }
+        if (descriptors & GPU_RESOURCE_TYPE_INDEX_BUFFER)
+        {
+            result |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+        }
+        if (descriptors & GPU_RESOURCE_TYPE_VERTEX_BUFFER)
+        {
+            result |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        }
+        if (descriptors & GPU_RESOURCE_TYPE_INDIRECT_BUFFER)
+        {
+            result |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+        }
+#ifdef ENABLE_RAYTRACING
+        if (descriptors & CGPU_RESOURCE_TYPE_RAY_TRACING)
+        {
+            result |= VK_BUFFER_USAGE_RAY_TRACING_BIT_NV;
+        }
+#endif
+        return result;
+    }
+
 #ifdef __cplusplus
 }
 #endif // __cplusplus

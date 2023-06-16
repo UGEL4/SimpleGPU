@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include "GPUVulkanEXTs.h"
 #include "backend/vulkan/GPUVulkanUtils.h"
+#include "backend/vulkan/vma/vk_mem_alloc.h"
 
 class VulkanBlackboard
 {
@@ -60,6 +61,7 @@ const GPUProcTable vkTable = {
     .CreateDevice         = &CreateDevice_Vulkan,
     .FreeDevice           = &FreeDevice_Vulkan,
     .GetQueue             = &GetQueue_Vulkan,
+    .FreeQueue            = &GPUFreeQueue_Vulkan,
     .SubmitQueue          = &GPUSubmitQueue_Vulkan,
     .WaitQueueIdle        = &GPUWaitQueueIdle_Vulkan,
     .QueuePresent         = &GPUQueuePresent_Vulkan,
@@ -86,14 +88,16 @@ const GPUProcTable vkTable = {
     .FreeFence            = &GPUFreeFence_Vulkan,
     .WaitFences           = &GPUWaitFences_Vulkan,
     .QueryFenceStatus     = &GPUQueryFenceStatus_Vulkan,
-    .CreateSemaphore      = &GPUCreateSemaphore_Vulkan,
-    .FreeSemaphore        = &GPUFreeSemaphore_Vulkan,
+    .GpuCreateSemaphore        = &GPUCreateSemaphore_Vulkan,
+    .GpuFreeSemaphore          = &GPUFreeSemaphore_Vulkan,
     .CmdBeginRenderPass        = &GPUCmdBeginRenderPass_Vulkan,
     .CmdEndRenderPass          = &GPUCmdEndRenderPass_Vulkan,
     .RenderEncoderSetViewport  = &GPURenderEncoderSetViewport_Vulkan,
     .RenderEncoderSetScissor   = &GPURenderEncoderSetScissor_Vulkan,
     .RenderEncoderBindPipeline = &GPURenderEncoderBindPipeline_Vulkan,
-    .RenderEncoderDraw         = &GPURenderEncoderDraw_Vulkan
+    .RenderEncoderDraw         = &GPURenderEncoderDraw_Vulkan,
+    .CreateBuffer              = &GPUCreateBuffer_Vulkan,
+    .FreeBuffer                = &GPUFreeBuffer_Vulkan,
 };
 const GPUProcTable* GPUVulkanProcTable()
 {
@@ -405,6 +409,39 @@ GPUDeviceID CreateDevice_Vulkan(GPUAdapterID pAdapter, const GPUDeviceDescriptor
     void* ptr           = calloc(1, sizeof(GPUVkPassTable));
     pDevice->pPassTable = new (ptr) GPUVkPassTable();
 
+    //vma
+    VmaVulkanFunctions vulkanFunctions = {
+        .vkGetPhysicalDeviceProperties       = vkGetPhysicalDeviceProperties,
+        .vkGetPhysicalDeviceMemoryProperties = vkGetPhysicalDeviceMemoryProperties,
+        .vkAllocateMemory                    = pDevice->mVkDeviceTable.vkAllocateMemory,
+        .vkFreeMemory                        = pDevice->mVkDeviceTable.vkFreeMemory,
+        .vkMapMemory                         = pDevice->mVkDeviceTable.vkMapMemory,
+        .vkUnmapMemory                       = pDevice->mVkDeviceTable.vkUnmapMemory,
+        .vkFlushMappedMemoryRanges           = pDevice->mVkDeviceTable.vkFlushMappedMemoryRanges,
+        .vkInvalidateMappedMemoryRanges      = pDevice->mVkDeviceTable.vkInvalidateMappedMemoryRanges,
+        .vkBindBufferMemory                  = pDevice->mVkDeviceTable.vkBindBufferMemory,
+        .vkBindImageMemory                   = pDevice->mVkDeviceTable.vkBindImageMemory,
+        .vkGetBufferMemoryRequirements       = pDevice->mVkDeviceTable.vkGetBufferMemoryRequirements,
+        .vkGetImageMemoryRequirements        = pDevice->mVkDeviceTable.vkGetImageMemoryRequirements,
+        .vkCreateBuffer                      = pDevice->mVkDeviceTable.vkCreateBuffer,
+        .vkDestroyBuffer                     = pDevice->mVkDeviceTable.vkDestroyBuffer,
+        .vkCreateImage                       = pDevice->mVkDeviceTable.vkCreateImage,
+        .vkDestroyImage                      = pDevice->mVkDeviceTable.vkDestroyImage,
+        .vkCmdCopyBuffer                     = pDevice->mVkDeviceTable.vkCmdCopyBuffer,
+        .vkGetBufferMemoryRequirements2KHR   = pDevice->mVkDeviceTable.vkGetBufferMemoryRequirements2KHR,
+        .vkGetImageMemoryRequirements2KHR    = pDevice->mVkDeviceTable.vkGetImageMemoryRequirements2KHR
+    };
+    VmaAllocatorCreateInfo vma{};
+    vma.device               = pDevice->pDevice;
+    vma.instance             = pVkInstance->pInstance;
+    vma.physicalDevice       = pVkAdapter->pPhysicalDevice;
+    vma.pVulkanFunctions     = &vulkanFunctions;
+    vma.pAllocationCallbacks = GLOBAL_VkAllocationCallbacks;
+    if (vmaCreateAllocator(&vma, &pDevice->pVmaAllocator) != VK_SUCCESS)
+    {
+        assert(0);
+    }
+
     return &(pDevice->spuer);
 }
 
@@ -415,6 +452,11 @@ void FreeDevice_Vulkan(GPUDeviceID pDevice)
     for (auto& iter : pVkDevice->pPassTable->cached_renderpasses)
     {
         pVkDevice->mVkDeviceTable.vkDestroyRenderPass(pVkDevice->pDevice, iter.second.pPass, GLOBAL_VkAllocationCallbacks);
+    }
+
+    for (auto& iter : pVkDevice->pPassTable->cached_framebuffers)
+    {
+        pVkDevice->mVkDeviceTable.vkDestroyFramebuffer(pVkDevice->pDevice, iter.second.pBuffer, GLOBAL_VkAllocationCallbacks);
     }
 
     pVkDevice->mVkDeviceTable.vkDestroyDescriptorPool(pVkDevice->pDevice, pVkDevice->pDescriptorPool->pVkDescPool, GLOBAL_VkAllocationCallbacks);
@@ -525,18 +567,26 @@ GPUQueueID GetQueue_Vulkan(GPUDeviceID pDevice, EGPUQueueType queueType, uint32_
 {
     GPUAdapter_Vulkan* pVkAdapter = (GPUAdapter_Vulkan*)pDevice->pAdapter;
     GPUDevice_Vulkan* pVkDevice   = (GPUDevice_Vulkan*)pDevice;
-    GPUQueue_Vulkan* pVkQueue     = (GPUQueue_Vulkan*)malloc(sizeof(GPUQueue_Vulkan));
-    GPUQueue tmpQueue             = {
-                    .pDevice    = pDevice,
-                    .queueType  = queueType,
-                    .queueIndex = queueIndex
-    };
-    *(GPUQueue*)&pVkQueue->super = tmpQueue;
-
+    GPUQueue_Vulkan* pVkQueue     = (GPUQueue_Vulkan*)calloc(1, sizeof(GPUQueue_Vulkan));
     pVkDevice->mVkDeviceTable.vkGetDeviceQueue(pVkDevice->pDevice, (uint32_t)pVkAdapter->queueFamilyIndices[queueType], queueIndex, &pVkQueue->pQueue);
     pVkQueue->queueFamilyIndex = (uint32_t)pVkAdapter->queueFamilyIndices[queueType];
 
+    pVkQueue->pInnerCmdPool = GPUCreateCommandPool(&pVkQueue->super);
+    GPUCommandBufferDescriptor desc{};
+    desc.isSecondary          = false;
+    pVkQueue->pInnerCmdBuffer = GPUCreateCommandBuffer(pVkQueue->pInnerCmdPool, &desc);
+    pVkQueue->pInnerFence     = GPUCreateFence(pDevice);
+
     return &pVkQueue->super;
+}
+
+void GPUFreeQueue_Vulkan(GPUQueueID queue)
+{
+    GPUQueue_Vulkan* Q = (GPUQueue_Vulkan*)queue;
+    if (Q && Q->pInnerCmdBuffer) GPUFreeCommandBuffer(Q->pInnerCmdBuffer);
+    if (Q && Q->pInnerCmdPool) GPUFreeCommandPool(Q->pInnerCmdPool);
+    if (Q && Q->pInnerFence) GPUFreeFence(Q->pInnerFence);
+    free(Q);
 }
 
 void GPUSubmitQueue_Vulkan(GPUQueueID queue, const struct GPUQueueSubmitDescriptor* desc)
@@ -2352,18 +2402,111 @@ void GPURenderEncoderDraw_Vulkan(GPURenderPassEncoderID encoder, uint32_t vertex
     D->mVkDeviceTable.vkCmdDraw(CMD->pVkCmd, vertex_count, 1, first_vertex, 0);
 }
 
-GPUBufferID GPUCreateBuffer(GPUDeviceID device)
+GPUBufferID GPUCreateBuffer_Vulkan(GPUDeviceID device, const GPUBufferDescriptor* desc)
 {
     GPUDevice_Vulkan* D = (GPUDevice_Vulkan*)device;
 
     // TODO: Align the buffer size to multiples of the dynamic uniform buffer minimum size
 
     VkBufferCreateInfo info{};
-    info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    info.flags = 0;
-    info.size  = inSize;
-    info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-    info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    info.sType                 = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    info.flags                 = 0;
+    info.size                  = desc->size;
+    info.usage                 = VulkanUtil_DescriptorTypesToBufferUsage(desc->descriptors, desc->format != GPU_FORMAT_UNDEFINED);
+    info.sharingMode           = VK_SHARING_MODE_EXCLUSIVE;
     info.queueFamilyIndexCount = 0;
     info.pQueueFamilyIndices   = nullptr;
+    if (desc->memory_usage == GPU_MEM_USAGE_GPU_ONLY || desc->memory_usage == GPU_MEM_USAGE_GPU_TO_CPU)
+        info.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
+    VmaAllocationCreateInfo vma{};
+    vma.usage = VMA_MEMORY_USAGE_AUTO;
+    VkBuffer pBuffer = VK_NULL_HANDLE;
+    VmaAllocation allocation = VK_NULL_HANDLE;
+    if (desc->flags & GPU_BCF_OWN_MEMORY_BIT)
+        vma.flags |= VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+    if (desc->flags & GPU_BCF_PERSISTENT_MAP_BIT)
+        vma.flags |= VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    if ((desc->flags & GPU_BCF_HOST_VISIBLE && desc->memory_usage & GPU_MEM_USAGE_GPU_ONLY) ||
+        (desc->flags & GPU_BCF_PERSISTENT_MAP_BIT && desc->memory_usage & GPU_MEM_USAGE_GPU_ONLY))
+        vma.preferredFlags |= VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+    // VMA recommanded upload & readback usage
+    if (desc->memory_usage == GPU_MEM_USAGE_CPU_TO_GPU)
+    {
+        vma.usage =
+        desc->prefer_on_device ? VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE :
+        desc->prefer_on_host   ? VMA_MEMORY_USAGE_AUTO_PREFER_HOST :
+                                 VMA_MEMORY_USAGE_AUTO;
+        vma.flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    }
+    if (desc->memory_usage == GPU_MEM_USAGE_GPU_TO_CPU)
+    {
+        vma.usage =
+        desc->prefer_on_device ? VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE :
+        desc->prefer_on_host   ? VMA_MEMORY_USAGE_AUTO_PREFER_HOST :
+                                 VMA_MEMORY_USAGE_AUTO;
+        vma.flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
+    }
+
+    VmaAllocationInfo alloc_info{};
+    VkResult rs = vmaCreateBuffer(D->pVmaAllocator, &info, &vma, &pBuffer, &allocation, &alloc_info);
+    if (rs == VK_ERROR_OUT_OF_DEVICE_MEMORY)
+    {
+        //return GPU_BUFFER_OUT_OF_DEVICE_MEMORY;
+        assert(0);
+    }
+    else if (rs == VK_ERROR_OUT_OF_HOST_MEMORY)
+    {
+        assert(0);
+        //return GPU_BUFFER_OUT_OF_HOST_MEMORY;
+    }
+    else if (rs != VK_SUCCESS)
+    {
+        assert(0 && "VMA failed to create buffer!");
+        return  nullptr;
+    }
+
+    GPUBuffer_Vulkan* buffer = (GPUBuffer_Vulkan*)_aligned_malloc(sizeof(GPUBuffer_Vulkan), _alignof(GPUBuffer_Vulkan));
+    buffer->pVkBuffer                = pBuffer;
+    buffer->pVkAllocation            = allocation;
+    buffer->super.cpu_mapped_address = alloc_info.pMappedData;
+    buffer->super.size               = desc->size;
+    buffer->super.descriptors        = desc->descriptors;
+    buffer->super.memory_usage       = desc->memory_usage;
+
+    GPUQueue_Vulkan* Q = (GPUQueue_Vulkan*)desc->owner_queue;
+    if (Q && pBuffer != VK_NULL_HANDLE && allocation != VK_NULL_HANDLE)
+    {
+        GPUResetCommandPool(Q->pInnerCmdPool);
+        GPUCmdBegin(Q->pInnerCmdBuffer);
+        {
+            GPUBufferBarrier init_barrier{};
+            init_barrier.buffer = &buffer->super;
+            init_barrier.src_state = GPU_RESOURCE_STATE_UNDEFINED;
+            init_barrier.dst_state = desc->start_state;
+            GPUResourceBarrierDescriptor barrier_desc{};
+            barrier_desc.buffer_barriers = &init_barrier;
+            barrier_desc.buffer_barriers_count = 1;
+            GPUCmdResourceBarrier(Q->pInnerCmdBuffer, &barrier_desc);
+        }
+        GPUCmdEnd(Q->pInnerCmdBuffer);
+
+        GPUQueueSubmitDescriptor submit_desc{};
+        submit_desc.cmds = &Q->pInnerCmdBuffer;
+        submit_desc.cmds_count = 1;
+        submit_desc.signal_fence = Q->pInnerFence;
+        GPUSubmitQueue(desc->owner_queue, &submit_desc);
+        GPUWaitFences(&Q->pInnerFence, 1);
+    }
+
+    return &buffer->super;
+}
+
+void GPUFreeBuffer_Vulkan(GPUBufferID buffer)
+{
+    GPUBuffer_Vulkan* B = (GPUBuffer_Vulkan*)buffer;
+    GPUDevice_Vulkan* D = (GPUDevice_Vulkan*)buffer->device;
+    assert(B->pVkAllocation);
+    vmaDestroyBuffer(D->pVmaAllocator, B->pVkBuffer, B->pVkAllocation);
+    _aligned_free(B);
 }

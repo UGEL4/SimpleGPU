@@ -96,6 +96,14 @@ GPUQueueID GPUGetQueue(GPUDeviceID pDevice, EGPUQueueType queueType, uint32_t qu
     return pQueue;
 }
 
+void GPUFreeQueue(GPUQueueID queue)
+{
+    assert(queue);
+    assert(queue->pDevice);
+    assert(queue->pDevice->pProcTableCache->FreeQueue);
+    queue->pDevice->pProcTableCache->FreeQueue(queue);
+}
+
 void GPUSubmitQueue(GPUQueueID queue, const struct GPUQueueSubmitDescriptor* desc)
 {
     assert(queue);
@@ -392,8 +400,8 @@ EGPUFenceStatus GPUQueryFenceStatus(GPUFenceID fence)
 GPUSemaphoreID GPUCreateSemaphore(GPUDeviceID device)
 {
     assert(device);
-    assert(device->pProcTableCache->CreateSemaphore);
-    GPUSemaphore* s = (GPUSemaphore*)device->pProcTableCache->CreateSemaphore(device);
+    assert(device->pProcTableCache->GpuCreateSemaphore);
+    GPUSemaphore* s = (GPUSemaphore*)device->pProcTableCache->GpuCreateSemaphore(device);
     s->device       = device;
     return s;
 }
@@ -402,8 +410,8 @@ void GPUFreeSemaphore(GPUSemaphoreID semaphore)
 {
     assert(semaphore);
     assert(semaphore->device);
-    assert(semaphore->device->pProcTableCache->FreeSemaphore);
-    semaphore->device->pProcTableCache->FreeSemaphore(semaphore);
+    assert(semaphore->device->pProcTableCache->GpuFreeSemaphore);
+    semaphore->device->pProcTableCache->GpuFreeSemaphore(semaphore);
 }
 
 GPURenderPassEncoderID GPUCmdBeginRenderPass(GPUCommandBufferID cmd, const struct GPURenderPassDescriptor* desc)
@@ -458,4 +466,27 @@ void GPURenderEncoderDraw(GPURenderPassEncoderID encoder, uint32_t vertex_count,
     assert(D);
     assert(D->pProcTableCache->RenderEncoderDraw);
     D->pProcTableCache->RenderEncoderDraw(encoder, vertex_count, first_vertex);
+}
+
+GPUBufferID GPUCreateBuffer(GPUDeviceID device, const GPUBufferDescriptor* desc)
+{
+    assert(device);
+    assert(device->pProcTableCache->CreateBuffer);
+    GPUBufferDescriptor new_desc;
+    memcpy(&new_desc, desc, sizeof(GPUBufferDescriptor));
+    if (desc->flags == 0)
+    {
+        new_desc.flags |= GPU_BCF_NONE;
+    }
+    GPUBuffer* B = (GPUBuffer*)device->pProcTableCache->CreateBuffer(device, &new_desc);
+    B->device    = device;
+    return B;
+}
+
+void GPUFreeBuffer(GPUBufferID buffer)
+{
+    assert(buffer);
+    assert(buffer->device);
+    assert(buffer->device->pProcTableCache->FreeBuffer);
+    buffer->device->pProcTableCache->FreeBuffer(buffer);
 }
