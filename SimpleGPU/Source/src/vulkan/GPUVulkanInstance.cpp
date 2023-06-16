@@ -436,7 +436,7 @@ GPUDeviceID CreateDevice_Vulkan(GPUAdapterID pAdapter, const GPUDeviceDescriptor
     vma.device               = pDevice->pDevice;
     vma.instance             = pVkInstance->pInstance;
     vma.physicalDevice       = pVkAdapter->pPhysicalDevice;
-    //vma.pVulkanFunctions     = &vulkanFunctions;
+    vma.pVulkanFunctions     = &vulkanFunctions;
     vma.pAllocationCallbacks = GLOBAL_VkAllocationCallbacks;
     if (vmaCreateAllocator(&vma, &pDevice->pVmaAllocator) != VK_SUCCESS)
     {
@@ -569,9 +569,16 @@ GPUQueueID GetQueue_Vulkan(GPUDeviceID pDevice, EGPUQueueType queueType, uint32_
     GPUAdapter_Vulkan* pVkAdapter = (GPUAdapter_Vulkan*)pDevice->pAdapter;
     GPUDevice_Vulkan* pVkDevice   = (GPUDevice_Vulkan*)pDevice;
     GPUQueue_Vulkan* pVkQueue     = (GPUQueue_Vulkan*)calloc(1, sizeof(GPUQueue_Vulkan));
-    pVkDevice->mVkDeviceTable.vkGetDeviceQueue(pVkDevice->pDevice, (uint32_t)pVkAdapter->queueFamilyIndices[queueType], queueIndex, &pVkQueue->pQueue);
-    pVkQueue->queueFamilyIndex = (uint32_t)pVkAdapter->queueFamilyIndices[queueType];
-
+    GPUQueue_Vulkan tmpQueue      = {
+             .super = {
+             .pDevice    = pDevice,
+             .queueType  = queueType,
+             .queueIndex = queueIndex }
+    };
+    pVkDevice->mVkDeviceTable.vkGetDeviceQueue(pVkDevice->pDevice, (uint32_t)pVkAdapter->queueFamilyIndices[queueType], queueIndex, &tmpQueue.pQueue);
+    tmpQueue.queueFamilyIndex = (uint32_t)pVkAdapter->queueFamilyIndices[queueType];
+    memcpy(pVkQueue, &tmpQueue, sizeof(GPUQueue_Vulkan));
+    
     pVkQueue->pInnerCmdPool = GPUCreateCommandPool(&pVkQueue->super);
     GPUCommandBufferDescriptor desc{};
     desc.isSecondary          = false;
