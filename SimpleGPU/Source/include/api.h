@@ -436,6 +436,8 @@ extern "C" {
     typedef GPUBufferID (*GPUProcCreateBuffer)(GPUDeviceID device, const GPUBufferDescriptor* desc);
     void GPUFreeBuffer(GPUBufferID buffer);
     typedef void (*GPUProcFreeBuffer)(GPUBufferID buffer);
+    void GPUTransferBufferToBuffer(GPUCommandBufferID cmd, const struct GPUBufferToBufferTransfer* desc);
+    typedef void (*GPUProcTransferBufferToBuffer)(GPUCommandBufferID cmd, const struct GPUBufferToBufferTransfer* desc);
 
 	typedef struct GPUProcTable
 	{
@@ -505,6 +507,7 @@ extern "C" {
         //buffer
         const GPUProcCreateBuffer CreateBuffer;
         const GPUProcFreeBuffer FreeBuffer;
+        const GPUProcTransferBufferToBuffer TransferBufferToBuffer;
 	}GPUProcTable;
 
 	typedef struct CGPUChainedDescriptor {
@@ -1080,6 +1083,21 @@ extern "C" {
         uint32_t wait_semaphore_count;
         uint8_t index;
     } GPUQueuePresentDescriptor;
+
+    typedef struct GPUBufferRange
+    {
+        uint64_t offset;
+        uint64_t size;
+    } GPUBufferRange;
+
+    typedef struct GPUBufferToBufferTransfer
+    {
+        GPUBufferID dst;
+        uint64_t dst_offset;
+        GPUBufferID src;
+        uint64_t src_offset;
+        uint64_t size;
+    } GPUBufferToBufferTransfer;
 
 #ifdef __cplusplus
 }

@@ -13,6 +13,10 @@ extern "C" {
 
 #define GLOBAL_VkAllocationCallbacks VK_NULL_HANDLE
 
+#ifndef VK_USE_VOLK_DEVICE_TABLE
+    #define VK_USE_VOLK_DEVICE_TABLE
+#endif
+
 	const GPUProcTable* GPUVulkanProcTable();
 	const GPUSurfacesProcTable* GPUVulkanSurfacesTable();
 
@@ -89,6 +93,9 @@ extern "C" {
     //buffer
     GPUBufferID GPUCreateBuffer_Vulkan(GPUDeviceID device, const GPUBufferDescriptor* desc);
     void GPUFreeBuffer_Vulkan(GPUBufferID buffer);
+    void GPUMapBuffer_Vulkan(GPUBufferID buffer, const struct GPUBufferRange* range);
+    void GPUUnmapBuffer_Vulkan(GPUBufferID buffer);
+    void GPUTransferBufferToBuffer_Vulkan(GPUCommandBufferID cmd, const struct GPUBufferToBufferTransfer* desc);
 
     typedef struct VkUtil_DescriptorPool
     {

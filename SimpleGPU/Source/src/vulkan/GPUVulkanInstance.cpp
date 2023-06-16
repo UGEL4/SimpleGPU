@@ -98,6 +98,7 @@ const GPUProcTable vkTable = {
     .RenderEncoderDraw         = &GPURenderEncoderDraw_Vulkan,
     .CreateBuffer              = &GPUCreateBuffer_Vulkan,
     .FreeBuffer                = &GPUFreeBuffer_Vulkan,
+    .TransferBufferToBuffer    = &GPUTransferBufferToBuffer_Vulkan,
 };
 const GPUProcTable* GPUVulkanProcTable()
 {
@@ -435,7 +436,7 @@ GPUDeviceID CreateDevice_Vulkan(GPUAdapterID pAdapter, const GPUDeviceDescriptor
     vma.device               = pDevice->pDevice;
     vma.instance             = pVkInstance->pInstance;
     vma.physicalDevice       = pVkAdapter->pPhysicalDevice;
-    vma.pVulkanFunctions     = &vulkanFunctions;
+    //vma.pVulkanFunctions     = &vulkanFunctions;
     vma.pAllocationCallbacks = GLOBAL_VkAllocationCallbacks;
     if (vmaCreateAllocator(&vma, &pDevice->pVmaAllocator) != VK_SUCCESS)
     {
@@ -2509,4 +2510,38 @@ void GPUFreeBuffer_Vulkan(GPUBufferID buffer)
     assert(B->pVkAllocation);
     vmaDestroyBuffer(D->pVmaAllocator, B->pVkBuffer, B->pVkAllocation);
     _aligned_free(B);
+}
+
+void GPUMapBuffer_Vulkan(GPUBufferID buffer, const struct GPUBufferRange* range)
+{
+    GPUDevice_Vulkan* D = (GPUDevice_Vulkan*)buffer->device;
+    GPUBuffer_Vulkan* B = (GPUBuffer_Vulkan*)buffer;
+    VkResult rs = vmaMapMemory(D->pVmaAllocator, B->pVkAllocation, &B->super.cpu_mapped_address);
+    assert(rs == VK_SUCCESS);
+    if (range && (rs == VK_SUCCESS))
+    {
+        B->super.cpu_mapped_address = ((uint8_t*)B->super.cpu_mapped_address + range->offset);
+    }
+}
+
+void GPUUnmapBuffer_Vulkan(GPUBufferID buffer)
+{
+    GPUDevice_Vulkan* D = (GPUDevice_Vulkan*)buffer->device;
+    GPUBuffer_Vulkan* B = (GPUBuffer_Vulkan*)buffer;
+    vmaUnmapMemory(D->pVmaAllocator, B->pVkAllocation);
+    B->super.cpu_mapped_address = nullptr;
+}
+
+void GPUTransferBufferToBuffer_Vulkan(GPUCommandBufferID cmd, const struct GPUBufferToBufferTransfer* desc)
+{
+    GPUCommandBuffer_Vulkan* Cmd = (GPUCommandBuffer_Vulkan*)cmd;
+    GPUDevice_Vulkan* D          = (GPUDevice_Vulkan*)cmd->device;
+    GPUBuffer_Vulkan* Dst        = (GPUBuffer_Vulkan*)desc->dst;
+    GPUBuffer_Vulkan* Src        = (GPUBuffer_Vulkan*)desc->src;
+    VkBufferCopy region= {
+        .srcOffset = desc->src_offset,
+        .dstOffset = desc->dst_offset,
+        .size      = desc->size
+    };
+    D->mVkDeviceTable.vkCmdCopyBuffer(Cmd->pVkCmd, Src->pVkBuffer, Dst->pVkBuffer, 1, &region);
 }

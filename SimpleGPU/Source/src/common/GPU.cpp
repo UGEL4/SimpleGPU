@@ -490,3 +490,14 @@ void GPUFreeBuffer(GPUBufferID buffer)
     assert(buffer->device->pProcTableCache->FreeBuffer);
     buffer->device->pProcTableCache->FreeBuffer(buffer);
 }
+
+void GPUTransferBufferToBuffer(GPUCommandBufferID cmd, const struct GPUBufferToBufferTransfer* desc)
+{
+    assert(cmd);
+    assert(cmd->device);
+    assert(cmd->device->pProcTableCache->TransferBufferToBuffer);
+    assert(desc);
+    assert(desc->src);
+    assert(desc->dst);
+    cmd->device->pProcTableCache->TransferBufferToBuffer(cmd, desc);
+}

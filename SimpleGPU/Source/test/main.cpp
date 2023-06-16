@@ -186,6 +186,58 @@ int main(int argc, char** argv)
     GPUCommandBufferID cmd = GPUCreateCommandBuffer(pool, &cmdDesc);
     uint32_t backbufferIndex = 0;
 
+    struct Vertex {
+        float x;
+        float y;
+    };
+    Vertex vertices[] = {
+        { 0.0f, -0.5f },
+        { -0.5f, 0.5f },
+        { 0.5f, 0.5f }
+    };
+    GPUBufferDescriptor upload_buffer{};
+    upload_buffer.size = sizeof(vertices);
+    upload_buffer.flags = GPU_BCF_OWN_MEMORY_BIT | GPU_BCF_PERSISTENT_MAP_BIT;
+    upload_buffer.descriptors = GPU_RESOURCE_TYPE_NONE;
+    upload_buffer.memory_usage = GPU_MEM_USAGE_CPU_ONLY;
+    GPUBufferID uploadBuffer   = GPUCreateBuffer(device, &upload_buffer);
+
+    GPUBufferDescriptor vertex_desc{};
+    vertex_desc.size         = sizeof(vertices);
+    vertex_desc.flags        = GPU_BCF_OWN_MEMORY_BIT;
+    vertex_desc.descriptors  = GPU_RESOURCE_TYPE_VERTEX_BUFFER;
+    vertex_desc.memory_usage = GPU_MEM_USAGE_GPU_ONLY;
+    GPUBufferID vertexBuffer = GPUCreateBuffer(device, &vertex_desc);
+
+    //COPY
+    memcpy(uploadBuffer->cpu_mapped_address, vertices, sizeof(vertices));
+
+    GPUResetCommandPool(pool);
+    GPUCmdBegin(cmd);
+    {
+        GPUBufferToBufferTransfer trans_verticex_buffer_desc{};
+        trans_verticex_buffer_desc.size       = sizeof(vertices);
+        trans_verticex_buffer_desc.src        = uploadBuffer;
+        trans_verticex_buffer_desc.src_offset = 0;
+        trans_verticex_buffer_desc.dst        = vertexBuffer;
+        trans_verticex_buffer_desc.dst_offset = 0;
+        GPUTransferBufferToBuffer(cmd, &trans_verticex_buffer_desc);
+        GPUBufferBarrier vertex_barrier{};
+        vertex_barrier.buffer    = vertexBuffer;
+        vertex_barrier.src_state = GPU_RESOURCE_STATE_COPY_DEST;
+        vertex_barrier.dst_state = GPU_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+        GPUResourceBarrierDescriptor vertex_rs_barrer{};
+        vertex_rs_barrer.buffer_barriers       = &vertex_barrier;
+        vertex_rs_barrer.buffer_barriers_count = 1;
+        GPUCmdResourceBarrier(cmd, &vertex_rs_barrer);
+    }
+    GPUCmdEnd(cmd);
+    GPUQueueSubmitDescriptor cpy_submit = { .cmds = &cmd, .cmds_count = 1 };
+    GPUSubmitQueue(pGraphicQueue, &cpy_submit);
+    GPUWaitQueueIdle(pGraphicQueue);
+
+    GPUFreeBuffer(uploadBuffer);
+
     bool exit = false;
     MSG msg{};
     while (!exit)
@@ -237,6 +289,8 @@ int main(int argc, char** argv)
                     GPURenderEncoderSetScissor(encoder, 0, 0, backbuffer->width,
                                                backbuffer->height);
                     GPURenderEncoderBindPipeline(encoder, pipeline);
+                    //bind vertexbuffer
+                    //bind descriptor ste
                     GPURenderEncoderDraw(encoder, 3, 0);
                 }
                 GPUCmdEndRenderPass(cmd, encoder);
@@ -274,6 +328,7 @@ int main(int argc, char** argv)
     {
         GPUFreeTextureView(ppSwapchainImage[i]);
     }
+    GPUFreeBuffer(vertexBuffer);
     GPUFreeCommandBuffer(cmd);
     GPUFreeCommandPool(pool);
     GPUFreeRenderPipeline(pipeline);
