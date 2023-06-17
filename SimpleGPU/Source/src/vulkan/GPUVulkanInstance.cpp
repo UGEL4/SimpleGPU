@@ -96,7 +96,9 @@ const GPUProcTable vkTable = {
     .RenderEncoderSetScissor        = &GPURenderEncoderSetScissor_Vulkan,
     .RenderEncoderBindPipeline      = &GPURenderEncoderBindPipeline_Vulkan,
     .RenderEncoderDraw              = &GPURenderEncoderDraw_Vulkan,
+    .RenderEncoderDrawIndexed       = &GPURenderEncoderDrawIndexed_Vulkan,
     .RenderEncoderBindVertexBuffers = &GPURenderEncoderBindVertexBuffers_Vulkan,
+    .RenderEncoderBindIndexBuffer   = &GPURenderEncoderBindIndexBuffer_Vulkan,
     .CreateBuffer                   = &GPUCreateBuffer_Vulkan,
     .FreeBuffer                     = &GPUFreeBuffer_Vulkan,
     .TransferBufferToBuffer         = &GPUTransferBufferToBuffer_Vulkan,
@@ -2421,6 +2423,13 @@ void GPURenderEncoderDraw_Vulkan(GPURenderPassEncoderID encoder, uint32_t vertex
     D->mVkDeviceTable.vkCmdDraw(CMD->pVkCmd, vertex_count, 1, first_vertex, 0);
 }
 
+void GPURenderEncoderDrawIndexed_Vulkan(GPURenderPassEncoderID encoder, uint32_t indexCount, uint32_t firstIndex, uint32_t vertexOffset)
+{
+    GPUDevice_Vulkan* D          = (GPUDevice_Vulkan*)encoder->device;
+    GPUCommandBuffer_Vulkan* CMD = (GPUCommandBuffer_Vulkan*)encoder;
+    D->mVkDeviceTable.vkCmdDrawIndexed(CMD->pVkCmd, indexCount, 1, firstIndex, vertexOffset, 0);
+}
+
 void GPURenderEncoderBindVertexBuffers_Vulkan(GPURenderPassEncoderID encoder, uint32_t buffer_count,
                                               const GPUBufferID* buffers, const uint32_t* strides, const uint32_t* offsets)
 {
@@ -2440,6 +2449,18 @@ void GPURenderEncoderBindVertexBuffers_Vulkan(GPURenderPassEncoderID encoder, ui
     }
 
     D->mVkDeviceTable.vkCmdBindVertexBuffers(Cmd->pVkCmd, 0, final_buffer_count, vkBuffers, vkOffsets);
+}
+
+void GPURenderEncoderBindIndexBuffer_Vulkan(GPURenderPassEncoderID encoder, GPUBufferID buffer, uint32_t offset, uint64_t indexStride)
+{
+    GPUCommandBuffer_Vulkan* Cmd = (GPUCommandBuffer_Vulkan*)encoder;
+    const GPUDevice_Vulkan* D    = (GPUDevice_Vulkan*)Cmd->super.device;
+    GPUBuffer_Vulkan* B          = (GPUBuffer_Vulkan*)buffer;
+
+    VkIndexType indexType = 
+        (sizeof(uint16_t) == indexStride) ? VK_INDEX_TYPE_UINT16 : 
+        ((sizeof(uint8_t) == indexStride) ? VK_INDEX_TYPE_UINT8_EXT : VK_INDEX_TYPE_UINT32);
+    D->mVkDeviceTable.vkCmdBindIndexBuffer(Cmd->pVkCmd, B->pVkBuffer, offset, indexType);
 }
 
 GPUBufferID GPUCreateBuffer_Vulkan(GPUDeviceID device, const GPUBufferDescriptor* desc)

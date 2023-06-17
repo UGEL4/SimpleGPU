@@ -433,10 +433,14 @@ extern "C" {
     typedef void (*GPUProcRenderEncoderBindPipeline)(GPURenderPassEncoderID encoder, GPURenderPipelineID pipeline);
     void GPURenderEncoderDraw(GPURenderPassEncoderID encoder, uint32_t vertex_count, uint32_t first_vertex);
     typedef void (*GPUProcRenderEncoderDraw)(GPURenderPassEncoderID encoder, uint32_t vertex_count, uint32_t first_vertex);
+    void GPURenderEncoderDrawIndexed(GPURenderPassEncoderID encoder, uint32_t indexCount, uint32_t firstIndex, uint32_t vertexOffset);
+    typedef void (*GPUProcRenderEncoderDrawIndexed)(GPURenderPassEncoderID encoder, uint32_t indexCount, uint32_t firstIndex, uint32_t vertexOffset);
     void GPURenderEncoderBindVertexBuffers(GPURenderPassEncoderID encoder, uint32_t buffer_count,
                                                   const GPUBufferID* buffers, const uint32_t* strides, const uint32_t* offsets);
     typedef void (*GPUProcRenderEncoderBindVertexBuffers)(GPURenderPassEncoderID encoder, uint32_t buffer_count,
                                                    const GPUBufferID* buffers, const uint32_t* strides, const uint32_t* offsets);
+    void GPURenderEncoderBindIndexBuffer(GPURenderPassEncoderID encoder, GPUBufferID buffer, uint32_t offset, uint64_t indexStride);
+    typedef void (*GPUProcRenderEncoderBindIndexBuffer)(GPURenderPassEncoderID encoder, GPUBufferID buffer, uint32_t offset, uint64_t indexStride);
 
     //buffer
     GPUBufferID GPUCreateBuffer(GPUDeviceID device, const GPUBufferDescriptor* desc);
@@ -510,7 +514,9 @@ extern "C" {
         const GPUProcRenderEncoderSetScissor RenderEncoderSetScissor;
         const GPUProcRenderEncoderBindPipeline RenderEncoderBindPipeline;
         const GPUProcRenderEncoderDraw RenderEncoderDraw;
+        const GPUProcRenderEncoderDrawIndexed RenderEncoderDrawIndexed;
         const GPUProcRenderEncoderBindVertexBuffers RenderEncoderBindVertexBuffers;
+        const GPUProcRenderEncoderBindIndexBuffer RenderEncoderBindIndexBuffer;
 
         //buffer
         const GPUProcCreateBuffer CreateBuffer;
