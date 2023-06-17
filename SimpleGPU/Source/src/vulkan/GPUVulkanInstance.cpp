@@ -88,17 +88,18 @@ const GPUProcTable vkTable = {
     .FreeFence            = &GPUFreeFence_Vulkan,
     .WaitFences           = &GPUWaitFences_Vulkan,
     .QueryFenceStatus     = &GPUQueryFenceStatus_Vulkan,
-    .GpuCreateSemaphore        = &GPUCreateSemaphore_Vulkan,
-    .GpuFreeSemaphore          = &GPUFreeSemaphore_Vulkan,
-    .CmdBeginRenderPass        = &GPUCmdBeginRenderPass_Vulkan,
-    .CmdEndRenderPass          = &GPUCmdEndRenderPass_Vulkan,
-    .RenderEncoderSetViewport  = &GPURenderEncoderSetViewport_Vulkan,
-    .RenderEncoderSetScissor   = &GPURenderEncoderSetScissor_Vulkan,
-    .RenderEncoderBindPipeline = &GPURenderEncoderBindPipeline_Vulkan,
-    .RenderEncoderDraw         = &GPURenderEncoderDraw_Vulkan,
-    .CreateBuffer              = &GPUCreateBuffer_Vulkan,
-    .FreeBuffer                = &GPUFreeBuffer_Vulkan,
-    .TransferBufferToBuffer    = &GPUTransferBufferToBuffer_Vulkan,
+    .GpuCreateSemaphore             = &GPUCreateSemaphore_Vulkan,
+    .GpuFreeSemaphore               = &GPUFreeSemaphore_Vulkan,
+    .CmdBeginRenderPass             = &GPUCmdBeginRenderPass_Vulkan,
+    .CmdEndRenderPass               = &GPUCmdEndRenderPass_Vulkan,
+    .RenderEncoderSetViewport       = &GPURenderEncoderSetViewport_Vulkan,
+    .RenderEncoderSetScissor        = &GPURenderEncoderSetScissor_Vulkan,
+    .RenderEncoderBindPipeline      = &GPURenderEncoderBindPipeline_Vulkan,
+    .RenderEncoderDraw              = &GPURenderEncoderDraw_Vulkan,
+    .RenderEncoderBindVertexBuffers = &GPURenderEncoderBindVertexBuffers_Vulkan,
+    .CreateBuffer                   = &GPUCreateBuffer_Vulkan,
+    .FreeBuffer                     = &GPUFreeBuffer_Vulkan,
+    .TransferBufferToBuffer         = &GPUTransferBufferToBuffer_Vulkan,
 };
 const GPUProcTable* GPUVulkanProcTable()
 {
@@ -2410,6 +2411,27 @@ void GPURenderEncoderDraw_Vulkan(GPURenderPassEncoderID encoder, uint32_t vertex
     D->mVkDeviceTable.vkCmdDraw(CMD->pVkCmd, vertex_count, 1, first_vertex, 0);
 }
 
+void GPURenderEncoderBindVertexBuffers_Vulkan(GPURenderPassEncoderID encoder, uint32_t buffer_count,
+                                              const GPUBufferID* buffers, const uint32_t* strides, const uint32_t* offsets)
+{
+    GPUCommandBuffer_Vulkan* Cmd      = (GPUCommandBuffer_Vulkan*)encoder;
+    const GPUDevice_Vulkan* D         = (GPUDevice_Vulkan*)Cmd->super.device;
+    GPUAdapter_Vulkan* A              = (GPUAdapter_Vulkan*)D->spuer.pAdapter;
+    const GPUBuffer_Vulkan** Buffers  = (const GPUBuffer_Vulkan**)buffers;
+    const uint32_t final_buffer_count = buffer_count < A->physicalDeviceProperties.properties.limits.maxVertexInputBindings ? buffer_count : A->physicalDeviceProperties.properties.limits.maxVertexInputBindings;
+
+    VkBuffer vkBuffers[64]     = {};
+    VkDeviceSize vkOffsets[64] = {};
+
+    for (uint32_t i = 0; i < final_buffer_count; ++i)
+    {
+        vkBuffers[i] = Buffers[i]->pVkBuffer;
+        vkOffsets[i] = (offsets ? offsets[i] : 0);
+    }
+
+    D->mVkDeviceTable.vkCmdBindVertexBuffers(Cmd->pVkCmd, 0, final_buffer_count, vkBuffers, vkOffsets);
+}
+
 GPUBufferID GPUCreateBuffer_Vulkan(GPUDeviceID device, const GPUBufferDescriptor* desc)
 {
     GPUDevice_Vulkan* D = (GPUDevice_Vulkan*)device;
@@ -2428,8 +2450,8 @@ GPUBufferID GPUCreateBuffer_Vulkan(GPUDeviceID device, const GPUBufferDescriptor
         info.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
     VmaAllocationCreateInfo vma{};
-    vma.usage = VMA_MEMORY_USAGE_AUTO;
-    VkBuffer pBuffer = VK_NULL_HANDLE;
+    vma.usage                = (VmaMemoryUsage)desc->memory_usage;
+    VkBuffer pBuffer         = VK_NULL_HANDLE;
     VmaAllocation allocation = VK_NULL_HANDLE;
     if (desc->flags & GPU_BCF_OWN_MEMORY_BIT)
         vma.flags |= VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;

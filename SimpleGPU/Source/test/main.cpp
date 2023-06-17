@@ -290,6 +290,8 @@ int main(int argc, char** argv)
                                                backbuffer->height);
                     GPURenderEncoderBindPipeline(encoder, pipeline);
                     //bind vertexbuffer
+                    uint32_t stride = sizeof(Vertex);
+                    GPURenderEncoderBindVertexBuffers(encoder, 1, &vertexBuffer, &stride, nullptr);
                     //bind descriptor ste
                     GPURenderEncoderDraw(encoder, 3, 0);
                 }

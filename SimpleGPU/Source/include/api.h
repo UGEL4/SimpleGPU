@@ -37,6 +37,7 @@ DEFINE_GPU_OBJECT(GPUFence)
 DEFINE_GPU_OBJECT(GPUSemaphore)
 DEFINE_GPU_OBJECT(GPUBuffer)
 DEFINE_GPU_OBJECT(GPURenderPassEncoder)
+DEFINE_GPU_OBJECT(GPUDescriptorSet)
 
 #ifdef __cplusplus
 extern "C" {
@@ -430,6 +431,10 @@ extern "C" {
     typedef void (*GPUProcRenderEncoderBindPipeline)(GPURenderPassEncoderID encoder, GPURenderPipelineID pipeline);
     void GPURenderEncoderDraw(GPURenderPassEncoderID encoder, uint32_t vertex_count, uint32_t first_vertex);
     typedef void (*GPUProcRenderEncoderDraw)(GPURenderPassEncoderID encoder, uint32_t vertex_count, uint32_t first_vertex);
+    void GPURenderEncoderBindVertexBuffers(GPURenderPassEncoderID encoder, uint32_t buffer_count,
+                                                  const GPUBufferID* buffers, const uint32_t* strides, const uint32_t* offsets);
+    typedef void (*GPUProcRenderEncoderBindVertexBuffers)(GPURenderPassEncoderID encoder, uint32_t buffer_count,
+                                                   const GPUBufferID* buffers, const uint32_t* strides, const uint32_t* offsets);
 
     //buffer
     GPUBufferID GPUCreateBuffer(GPUDeviceID device, const GPUBufferDescriptor* desc);
@@ -503,6 +508,7 @@ extern "C" {
         const GPUProcRenderEncoderSetScissor RenderEncoderSetScissor;
         const GPUProcRenderEncoderBindPipeline RenderEncoderBindPipeline;
         const GPUProcRenderEncoderDraw RenderEncoderDraw;
+        const GPUProcRenderEncoderBindVertexBuffers RenderEncoderBindVertexBuffers;
 
         //buffer
         const GPUProcCreateBuffer CreateBuffer;
@@ -1098,6 +1104,12 @@ extern "C" {
         uint64_t src_offset;
         uint64_t size;
     } GPUBufferToBufferTransfer;
+
+    typedef struct GPUDescriptorSet
+    {
+        GPURootSignatureID root_signature;
+        uint32_t index;
+    } GPUDescriptorSet;
 
 #ifdef __cplusplus
 }

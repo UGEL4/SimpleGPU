@@ -468,6 +468,16 @@ void GPURenderEncoderDraw(GPURenderPassEncoderID encoder, uint32_t vertex_count,
     D->pProcTableCache->RenderEncoderDraw(encoder, vertex_count, first_vertex);
 }
 
+void GPURenderEncoderBindVertexBuffers(GPURenderPassEncoderID encoder, uint32_t buffer_count,
+                                       const GPUBufferID* buffers, const uint32_t* strides, const uint32_t* offsets)
+{
+    assert(encoder);
+    assert(encoder->device);
+    assert(encoder->device->pProcTableCache->RenderEncoderBindVertexBuffers);
+    assert(buffers);
+    encoder->device->pProcTableCache->RenderEncoderBindVertexBuffers(encoder, buffer_count, buffers, strides, offsets);
+}
+
 GPUBufferID GPUCreateBuffer(GPUDeviceID device, const GPUBufferDescriptor* desc)
 {
     assert(device);
