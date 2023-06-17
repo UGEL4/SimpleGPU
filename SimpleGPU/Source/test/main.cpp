@@ -167,6 +167,9 @@ int main(int argc, char** argv)
     rootRSDesc.shader_count                   = 2;
     GPURootSignatureID pRS                    = GPUCreateRootSignature(device, &rootRSDesc);
     GPUVertexLayout vertexLayout{};
+    vertexLayout.attributeCount = 2;
+    vertexLayout.attributes[0]  = { 1, GPU_FORMAT_R32G32B32_SFLOAT, 0, 0, sizeof(float) * 3, GPU_INPUT_RATE_VERTEX };
+    vertexLayout.attributes[1]  = { 1, GPU_FORMAT_R32G32B32_SFLOAT, 0, sizeof(float) * 3, sizeof(float) * 3, GPU_INPUT_RATE_VERTEX };
     GPURenderPipelineDescriptor pipelineDesc{};
     pipelineDesc.pRootSignature    = pRS;
     pipelineDesc.pVertexShader     = &shaderEntries[0];
@@ -189,12 +192,21 @@ int main(int argc, char** argv)
     struct Vertex {
         float x;
         float y;
+        float z;
+        float r;
+        float g;
+        float b;
     };
     Vertex vertices[] = {
-        { 0.0f, -0.5f },
-        { -0.5f, 0.5f },
-        { 0.5f, 0.5f }
+        { 0.0f, -0.5f, 0.f, 1.f, 0.f, 0.f },
+        { -0.5f, 0.5f, 0.f, 0.f, 1.f, 0.f },
+        { 0.5f, 0.5f, 0.f, 1.f, 0.f, 1.f }
     };
+    /*Vertex vertices[] = {
+        { 1.f, 0.f, 0.f, 0.f, 0.f, 1.f },
+        { 0.f, 0.f, 0.f, 0.f, 0.f, 0.f },
+        { 0.f, 0.f, 0.f, 0.f, 0.f, 0.f }
+    };*/
     GPUBufferDescriptor upload_buffer{};
     upload_buffer.size = sizeof(vertices);
     upload_buffer.flags = GPU_BCF_OWN_MEMORY_BIT | GPU_BCF_PERSISTENT_MAP_BIT;

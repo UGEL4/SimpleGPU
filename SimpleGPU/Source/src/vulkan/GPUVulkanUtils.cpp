@@ -252,9 +252,11 @@ uint32_t VulkanUtil_BitSizeOfBlock(EGPUFormat format)
 {
     switch (format)
     {
-        case EGPUFormat::GPU_FORMAT_R16_UINT: return 2;
-        case EGPUFormat::GPU_FORMAT_R32_UINT: return 4;
-        case EGPUFormat::GPU_FORMAT_R32_SFLOAT: return 4;
+        case EGPUFormat::GPU_FORMAT_R16_UINT: return 16;
+        case EGPUFormat::GPU_FORMAT_R32_UINT: return 32;
+        case EGPUFormat::GPU_FORMAT_R32_SFLOAT: return 32;
+        case EGPUFormat::GPU_FORMAT_R32G32_SFLOAT: return 64;
+        case EGPUFormat::GPU_FORMAT_R32G32B32_SFLOAT: return 96;
     }
     return 0;
 }

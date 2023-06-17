@@ -325,6 +325,16 @@ VkFormat GPUFormatToVulkanFormat(EGPUFormat format)
             return VK_FORMAT_R8G8B8A8_UNORM;
         case EGPUFormat::GPU_FORMAT_R8G8B8A8_SRGB:
             return VK_FORMAT_R8G8B8A8_SRGB;
+        case GPU_FORMAT_R16_UINT:
+            return VK_FORMAT_R16_UINT;
+        case GPU_FORMAT_R32_UINT:
+            return VK_FORMAT_R32_UINT;
+        case GPU_FORMAT_R32_SFLOAT:
+            return VK_FORMAT_R32_SFLOAT;
+        case GPU_FORMAT_R32G32_SFLOAT:
+            return VK_FORMAT_R32G32_SFLOAT;
+        case GPU_FORMAT_R32G32B32_SFLOAT:
+            return VK_FORMAT_R32G32B32_SFLOAT;
     }
     return VK_FORMAT_UNDEFINED;
 }
@@ -1256,7 +1266,7 @@ GPURenderPipelineID GPUCreateRenderPipeline_Vulkan(GPUDeviceID pDevice, const GP
     dsize += (sizeof(VkVertexInputBindingDescription) * inputBindingCount);
     uint64_t inputAttribsOffset = dsize;
     dsize += (sizeof(VkVertexInputAttributeDescription) * inputAttribCount);
-    uint8_t* ptr                                   = (uint8_t*)malloc(dsize);
+    uint8_t* ptr                                   = (uint8_t*)calloc(1, dsize);
     GPURenderPipeline_Vulkan* pRp                  = (GPURenderPipeline_Vulkan*)ptr;
     VkVertexInputBindingDescription* pBindingDesc  = (VkVertexInputBindingDescription*)(ptr + inputElemOffset);
     VkVertexInputAttributeDescription* pAttribDesc = (VkVertexInputAttributeDescription*)(ptr + inputAttribsOffset);
@@ -1266,7 +1276,7 @@ GPURenderPipelineID GPUCreateRenderPipeline_Vulkan(GPUDeviceID pDevice, const GP
     {
         const GPUVertexAttribute* pAttrib         = &pDesc->pVertexLayout->attributes[i];
         uint32_t arraySize                        = pAttrib->arraySize ? pAttrib->arraySize : 1;
-        VkVertexInputBindingDescription* bindDesc = &pBindingDesc[i];
+        VkVertexInputBindingDescription* bindDesc = &pBindingDesc[pAttrib->binding];
         bindDesc->binding                         = pAttrib->binding;
         if (pAttrib->rate == EGPUVertexInputRate::GPU_INPUT_RATE_VERTEX)
         {
@@ -1276,7 +1286,7 @@ GPURenderPipelineID GPUCreateRenderPipeline_Vulkan(GPUDeviceID pDevice, const GP
         {
             bindDesc->inputRate = VK_VERTEX_INPUT_RATE_INSTANCE;
         }
-        bindDesc->stride = pAttrib->stride;
+        bindDesc->stride += pAttrib->stride;
 
         for (uint32_t j = 0; j < arraySize; j++)
         {
