@@ -165,6 +165,8 @@ void VulkanUtil_QueryAllAdapters(struct GPUInstance_Vulkan* pInstance, const cha
             VulkanUtil_SelectQueueFamilyIndex(pVkAdapter);
             // format
             VulkanUtil_EnumFormatSupport(pVkAdapter);
+            //TODO
+            VulkanUtil_RecordAdaptorDetail(pVkAdapter);
         }
     }
     else
@@ -236,16 +238,31 @@ void VulkanUtil_SelectPhysicalDeviceExtensions(GPUAdapter_Vulkan* pAdapter, cons
 void VulkanUtil_EnumFormatSupport(GPUAdapter_Vulkan* pAdapter)
 {
     GPUAdapterDetail* pAdapterDetail = &pAdapter->adapterDetail;
-    for (uint32_t i = 0; i < EGPUFormat::GPU_FORMT_COUNT; i++)
+    for (uint32_t i = 0; i < EGPUFormat::GPU_FORMAT_COUNT; i++)
     {
-        VkFormatProperties formatProps;
+        VkFormatProperties formatSupport;
+        pAdapterDetail->format_supports[i].shader_read         = 0;
+        pAdapterDetail->format_supports[i].shader_write        = 0;
+        pAdapterDetail->format_supports[i].render_target_write = 0;
         VkFormat fmt = GPUFormatToVulkanFormat((EGPUFormat)i);
         if (fmt == VK_FORMAT_UNDEFINED)
         {
             continue;
         }
-        vkGetPhysicalDeviceFormatProperties(pAdapter->pPhysicalDevice, fmt, &formatProps);
+        vkGetPhysicalDeviceFormatProperties(pAdapter->pPhysicalDevice, fmt, &formatSupport);
+        pAdapterDetail->format_supports[i].shader_read =
+        (formatSupport.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT) != 0;
+        pAdapterDetail->format_supports[i].shader_write =
+        (formatSupport.optimalTilingFeatures & VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT) != 0;
+        pAdapterDetail->format_supports[i].render_target_write =
+        (formatSupport.optimalTilingFeatures &
+         (VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT | VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)) != 0;
     }
+}
+
+void VulkanUtil_RecordAdaptorDetail(GPUAdapter_Vulkan* pAdapter)
+{
+    GPUAdapterDetail* detail = &pAdapter->adapterDetail;
 }
 
 uint32_t VulkanUtil_BitSizeOfBlock(EGPUFormat format)
@@ -534,4 +551,23 @@ void VulkanUtil_FreeShaderReflection(GPUShaderLibrary_Vulkan* S)
     }
     GPU_SAFE_FREE(S->super.entry_reflections);
     GPU_SAFE_FREE(S->pReflect);
+}
+
+void VulkanUtil_ConsumeDescriptorSets(VkUtil_DescriptorPool* pool, const VkDescriptorSetLayout* pLayouts, VkDescriptorSet* pSets, uint32_t setsNum)
+{
+    VkDescriptorSetAllocateInfo setsAllocInfo{};
+    setsAllocInfo.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    setsAllocInfo.descriptorPool     = pool->pVkDescPool;
+    setsAllocInfo.descriptorSetCount = setsNum;
+    setsAllocInfo.pSetLayouts        = pLayouts;
+    assert(pool->Device->mVkDeviceTable.vkAllocateDescriptorSets(pool->Device->pDevice, &setsAllocInfo, pSets) == VK_SUCCESS);
+}
+
+void VulkanUtil_ReturnDescriptorSets(struct VkUtil_DescriptorPool* pPool, VkDescriptorSet* pSets, uint32_t setsNum)
+{
+    // TODO: It is possible to avoid using that flag by updating descriptor sets instead of deleting them.
+    // The application can keep track of recycled descriptor sets and re-use one of them when a new one is requested.
+    // Reference: https://arm-software.github.io/vulkan_best_practice_for_mobile_developers/samples/performance/descriptor_management/descriptor_management_tutorial.html
+    GPUDevice_Vulkan* D = (GPUDevice_Vulkan*)pPool->Device;
+    D->mVkDeviceTable.vkFreeDescriptorSets(D->pDevice, pPool->pVkDescPool, setsNum, pSets);
 }

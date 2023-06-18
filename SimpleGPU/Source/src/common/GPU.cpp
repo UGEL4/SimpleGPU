@@ -203,6 +203,23 @@ void GPUFreeTextureView(GPUTextureViewID pTextureView)
     pTextureView->pDevice->pProcTableCache->FreeTextureView(pTextureView);
 }
 
+GPUTextureID GPUCreateTexture(GPUDeviceID device, const GPUTextureDescriptor* desc)
+{
+    assert(device);
+    assert(device->pProcTableCache->CreateTexture);
+    GPUTexture* T = (GPUTexture*)device->pProcTableCache->CreateTexture(device, desc);
+    T->pDevice    = device;
+    return T;
+}
+
+void GPUFreeTexture(GPUTextureID texture)
+{
+    assert(texture);
+    assert(texture->pDevice);
+    assert(texture->pDevice->pProcTableCache->FreeTexture);
+    texture->pDevice->pProcTableCache->FreeTexture(texture);
+}
+
 GPUShaderLibraryID GPUCreateShaderLibrary(GPUDeviceID pDevice, const GPUShaderLibraryDescriptor* pDesc)
 {
     assert(pDevice);
@@ -360,6 +377,14 @@ void GPUCmdResourceBarrier(GPUCommandBufferID cmd, const struct GPUResourceBarri
     assert(cmd->device);
     assert(cmd->device->pProcTableCache->CmdResourceBarrier);
     cmd->device->pProcTableCache->CmdResourceBarrier(cmd, desc);
+}
+
+void GPUCmdTransferBufferToTexture(GPUCommandBufferID cmd, const struct GPUBufferToTextureTransfer* desc)
+{
+    assert(cmd);
+    assert(cmd->device);
+    assert(cmd->device->pProcTableCache->CmdTransferBufferToTexture);
+    cmd->device->pProcTableCache->CmdTransferBufferToTexture(cmd, desc);
 }
 
 GPUFenceID GPUCreateFence(GPUDeviceID device)
@@ -527,4 +552,49 @@ void GPUTransferBufferToBuffer(GPUCommandBufferID cmd, const struct GPUBufferToB
     assert(desc->src);
     assert(desc->dst);
     cmd->device->pProcTableCache->TransferBufferToBuffer(cmd, desc);
+}
+
+GPUSamplerID GPUCreateSampler(GPUDeviceID device, const struct GPUSamplerDescriptor* desc)
+{
+    assert(device);
+    assert(desc);
+    assert(device->pProcTableCache->CreateSampler);
+    GPUSampler* sampler = (GPUSampler*)device->pProcTableCache->CreateSampler(device, desc);
+    sampler->device     = device;
+    return sampler;
+}
+
+void GPUFreeSampler(GPUSamplerID sampler)
+{
+    assert(sampler);
+    assert(sampler->device);
+    assert(sampler->device->pProcTableCache->FreeSampler);
+    sampler->device->pProcTableCache->FreeSampler(sampler);
+}
+
+GPUDescriptorSetID GPUCreateDescriptorSet(GPUDeviceID device, const struct GPUDescriptorSetDescriptor* desc)
+{
+    assert(device);
+    assert(device->pProcTableCache->CreateDescriptorSet);
+    GPUDescriptorSet* set = (GPUDescriptorSet*)device->pProcTableCache->CreateDescriptorSet(device, desc);
+    set->root_signature   = desc->root_signature;
+    set->index            = desc->set_index;
+    return set;
+}
+void GPUFreeDescriptorSet(GPUDescriptorSetID set)
+{
+    assert(set);
+    assert(set->root_signature);
+    assert(set->root_signature->device);
+    assert(set->root_signature->device->pProcTableCache->FreeDescriptorSet);
+    set->root_signature->device->pProcTableCache->FreeDescriptorSet(set);
+}
+void GPUUpdateDescriptorSet(GPUDescriptorSetID set, const GPUDescriptorData* datas, uint32_t count)
+{
+    assert(set);
+    assert(set->root_signature);
+    assert(set->root_signature->device);
+    assert(set->root_signature->device->pProcTableCache->UpdateDescriptorSet);
+    assert(datas);
+    set->root_signature->device->pProcTableCache->UpdateDescriptorSet(set, datas, count);
 }

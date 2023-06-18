@@ -70,6 +70,8 @@ const GPUProcTable vkTable = {
     .AcquireNextImage     = &GPUAcquireNextImage_Vulkan,
     .CreateTextureView    = &GPUCreateTextureView_Vulkan,
     .FreeTextureView      = &GPUFreeTextureView_Vulkan,
+    .CreateTexture        = &GPUCreateTexture_Vulkan,
+    .FreeTexture          = &GPUFreeTexture_Vulkan,
     .CreateShaderLibrary  = &GPUCreateShaderLibrary_Vulkan,
     .FreeShaderLibrary    = &GPUFreeShaderLibrary_Vulkan,
     .CreateRenderPipeline = &GPUCreateRenderPipeline_Vulkan,
@@ -84,10 +86,11 @@ const GPUProcTable vkTable = {
     .CmdBegin             = &GPUCmdBegin_Vulkan,
     .CmdEnd               = &GPUCmdEnd_Vulkan,
     .CmdResourceBarrier   = &GPUCmdResourceBarrier_Vulkan,
-    .CreateFence          = &GPUCreateFence_Vulkan,
-    .FreeFence            = &GPUFreeFence_Vulkan,
-    .WaitFences           = &GPUWaitFences_Vulkan,
-    .QueryFenceStatus     = &GPUQueryFenceStatus_Vulkan,
+    .CmdTransferBufferToTexture     = &GPUCmdTransferBufferToTexture_Vulkan,
+    .CreateFence                    = &GPUCreateFence_Vulkan,
+    .FreeFence                      = &GPUFreeFence_Vulkan,
+    .WaitFences                     = &GPUWaitFences_Vulkan,
+    .QueryFenceStatus               = &GPUQueryFenceStatus_Vulkan,
     .GpuCreateSemaphore             = &GPUCreateSemaphore_Vulkan,
     .GpuFreeSemaphore               = &GPUFreeSemaphore_Vulkan,
     .CmdBeginRenderPass             = &GPUCmdBeginRenderPass_Vulkan,
@@ -102,6 +105,11 @@ const GPUProcTable vkTable = {
     .CreateBuffer                   = &GPUCreateBuffer_Vulkan,
     .FreeBuffer                     = &GPUFreeBuffer_Vulkan,
     .TransferBufferToBuffer         = &GPUTransferBufferToBuffer_Vulkan,
+    .CreateSampler                  = &GPUCreateSampler_Vulkan,
+    .FreeSampler                    = &GPUFreeSampler_Vulkan,
+    .CreateDescriptorSet            = &GPUCreateDescriptorSet_Vulkan,
+    .FreeDescriptorSet              = &GPUFreeDescriptorSet_Vulkan,
+    .UpdateDescriptorSet            = &GPUUpdateDescriptorSet_Vulkan,
 };
 const GPUProcTable* GPUVulkanProcTable()
 {
@@ -337,6 +345,12 @@ VkFormat GPUFormatToVulkanFormat(EGPUFormat format)
             return VK_FORMAT_R32G32_SFLOAT;
         case GPU_FORMAT_R32G32B32_SFLOAT:
             return VK_FORMAT_R32G32B32_SFLOAT;
+        case GPU_FORMAT_D16_UNORM_S8_UINT:
+            return VK_FORMAT_D16_UNORM_S8_UINT;
+        case GPU_FORMAT_D24_UNORM_S8_UINT:
+            return VK_FORMAT_D24_UNORM_S8_UINT;
+        case GPU_FORMAT_D32_SFLOAT_S8_UINT:
+            return VK_FORMAT_D32_SFLOAT_S8_UINT;
     }
     return VK_FORMAT_UNDEFINED;
 }
@@ -353,8 +367,24 @@ EGPUFormat GPUVulkanFormatToGPUFormat(VkFormat format)
             return EGPUFormat::GPU_FORMAT_R8G8BA8_UNORM;
         case VK_FORMAT_R8G8B8A8_SRGB:
             return EGPUFormat::GPU_FORMAT_R8G8B8A8_SRGB;
+        case VK_FORMAT_R16_UINT:
+            return GPU_FORMAT_R16_UINT;
+        case VK_FORMAT_R32_UINT:
+            return GPU_FORMAT_R32_UINT;
+        case VK_FORMAT_R32_SFLOAT:
+            return GPU_FORMAT_R32_SFLOAT;
+        case VK_FORMAT_R32G32_SFLOAT:
+            return GPU_FORMAT_R32G32_SFLOAT;
+        case VK_FORMAT_R32G32B32_SFLOAT:
+            return GPU_FORMAT_R32G32B32_SFLOAT;
+        case VK_FORMAT_D16_UNORM_S8_UINT:
+            return GPU_FORMAT_D16_UNORM_S8_UINT;
+        case VK_FORMAT_D24_UNORM_S8_UINT:
+            return GPU_FORMAT_D24_UNORM_S8_UINT;
+        case VK_FORMAT_D32_SFLOAT_S8_UINT:
+            return GPU_FORMAT_D32_SFLOAT_S8_UINT;
     }
-    return EGPUFormat::GPU_FORMT_COUNT;
+    return EGPUFormat::GPU_FORMAT_COUNT;
 }
 
 const float queuePriorities[] = {
@@ -1118,6 +1148,378 @@ void GPUFreeTextureView_Vulkan(GPUTextureViewID pTextureView)
     _aligned_free(pView);
 }
 
+GPUTextureID GPUCreateTexture_Vulkan(GPUDeviceID device, const GPUTextureDescriptor* desc)
+{
+    if (desc->sample_count > GPU_SAMPLE_COUNT_1 && desc->mip_levels > 1)
+    {
+        //cgpu_error("Multi-Sampled textures cannot have mip maps");
+        assert(false);
+        return nullptr;
+    }
+    // Alloc aligned memory
+    size_t totalSize      = sizeof(GPUTexture_Vulkan);
+    uint64_t unique_id    = UINT64_MAX;
+    GPUQueue_Vulkan* Q   = (GPUQueue_Vulkan*)desc->owner_queue;
+    GPUDevice_Vulkan* D  = (GPUDevice_Vulkan*)device;
+    GPUAdapter_Vulkan* A = (GPUAdapter_Vulkan*)device->pAdapter;
+
+    bool owns_image      = false;
+    bool is_dedicated    = false;
+    bool can_alias_alloc = false;
+    bool is_imported     = false;
+    VkImageType mImageType;
+    VkImage pVkImage                        = VK_NULL_HANDLE;
+    VkDeviceMemory pVkDeviceMemory          = VK_NULL_HANDLE;
+    uint32_t aspect_mask                    = 0;
+    VmaAllocation vmaAllocation             = VK_NULL_HANDLE;
+    const bool is_depth_stencil             = FormatUtil_IsDepthStencilFormat(desc->format);
+    const GPUFormatSupport* format_support = &A->adapterDetail.format_supports[desc->format];
+    /*if (desc->native_handle && !(desc->flags & CGPU_INNER_TCF_IMPORT_SHARED_HANDLE))
+    {
+        owns_image = false;
+        pVkImage   = (VkImage)desc->native_handle;
+    }
+    else */if (!desc->is_aliasing)
+    {
+        owns_image = true;
+    }
+
+    // Usage flags
+    VkImageUsageFlags additionalFlags = 0;
+    if (desc->descriptors & GPU_RESOURCE_TYPE_RENDER_TARGET)
+        additionalFlags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    else if (is_depth_stencil)
+        additionalFlags |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    uint32_t arraySize = desc->array_size;
+    // Image type
+    mImageType = VK_IMAGE_TYPE_MAX_ENUM;
+    if (desc->flags & GPU_TCF_FORCE_2D)
+    {
+        assert(desc->depth == 1);
+        mImageType = VK_IMAGE_TYPE_2D;
+    }
+    else if (desc->flags & GPU_TCF_FORCE_3D)
+        mImageType = VK_IMAGE_TYPE_3D;
+    else
+    {
+        if (desc->depth > 1)
+            mImageType = VK_IMAGE_TYPE_3D;
+        else if (desc->height > 1)
+            mImageType = VK_IMAGE_TYPE_2D;
+        else
+            mImageType = VK_IMAGE_TYPE_1D;
+    }
+    GPUResourceTypes descriptors = desc->descriptors;
+    bool cubemapRequired         = (GPU_RESOURCE_TYPE_TEXTURE_CUBE == (descriptors & GPU_RESOURCE_TYPE_TEXTURE_CUBE));
+    bool arrayRequired           = mImageType == VK_IMAGE_TYPE_3D;
+    // TODO: Support stencil format
+    const bool isStencilFormat = false;
+    (void)isStencilFormat;
+    // TODO: Support planar format
+    const bool isPlanarFormat  = false;
+    const uint32_t numOfPlanes = 1;
+    const bool isSinglePlane   = true;
+    assert(((isSinglePlane && numOfPlanes == 1) || (!isSinglePlane && numOfPlanes > 1 && numOfPlanes <= MAX_PLANE_COUNT)));
+
+    if (pVkImage == VK_NULL_HANDLE)
+    {
+        VkImageCreateInfo imageCreateInfo = {};
+        imageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        imageCreateInfo.pNext                 = NULL;
+        imageCreateInfo.flags                 = 0;
+        imageCreateInfo.imageType             = mImageType;
+        imageCreateInfo.format                = (VkFormat)GPUFormatToVulkanFormat(desc->format);
+        imageCreateInfo.extent.width          = desc->width;
+        imageCreateInfo.extent.height         = desc->height;
+        imageCreateInfo.extent.depth          = desc->depth;
+        imageCreateInfo.mipLevels             = desc->mip_levels;
+        imageCreateInfo.arrayLayers           = arraySize;
+        imageCreateInfo.samples               = VulkanUtil_SampleCountToVk(desc->sample_count);
+        imageCreateInfo.tiling                = VK_IMAGE_TILING_OPTIMAL;
+        imageCreateInfo.usage                 = VulkanUtil_DescriptorTypesToImageUsage(descriptors);
+        imageCreateInfo.sharingMode           = VK_SHARING_MODE_EXCLUSIVE;
+        imageCreateInfo.queueFamilyIndexCount = 0;
+        imageCreateInfo.pQueueFamilyIndices   = NULL;
+        imageCreateInfo.initialLayout         = VK_IMAGE_LAYOUT_UNDEFINED;
+        aspect_mask                           = VulkanUtil_DeterminAspectMask(imageCreateInfo.format, true);
+        imageCreateInfo.usage |= additionalFlags;
+        if (cubemapRequired)
+            imageCreateInfo.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+        if (arrayRequired)
+            imageCreateInfo.flags |= VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT_KHR;
+
+        VkFormatProperties format_props{};
+        vkGetPhysicalDeviceFormatProperties(A->pPhysicalDevice, imageCreateInfo.format, &format_props);
+        //if (isPlanarFormat) // multi-planar formats must have each plane separately bound to memory, rather than having a single memory binding for the whole image
+        //{
+        //    cgpu_assert(format_props.optimalTilingFeatures & VK_FORMAT_FEATURE_DISJOINT_BIT);
+        //    imageCreateInfo.flags |= VK_IMAGE_CREATE_DISJOINT_BIT;
+        //}
+        if ((VK_IMAGE_USAGE_SAMPLED_BIT & imageCreateInfo.usage) || (VK_IMAGE_USAGE_STORAGE_BIT & imageCreateInfo.usage))
+        {
+            // Make it easy to copy to and from textures
+            imageCreateInfo.usage |= (VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+        }
+        assert(format_support->shader_read && "GPU shader can't' read from this format");
+        // Verify that GPU supports this format
+        VkFormatFeatureFlags format_features = VulkanUtil_ImageUsageToFormatFeatures(imageCreateInfo.usage);
+        VkFormatFeatureFlags flags           = format_props.optimalTilingFeatures & format_features;
+        assert((flags != 0) && "Format is not supported for GPU local images (i.e. not host visible images)");
+        VmaAllocationCreateInfo mem_reqs {};
+        if (desc->is_aliasing)
+        {
+            // Aliasing VkImage
+            VkResult res = D->mVkDeviceTable.vkCreateImage(D->pDevice, &imageCreateInfo, GLOBAL_VkAllocationCallbacks, &pVkImage);
+            assert(res == VK_SUCCESS);
+        }
+        else
+        {
+            // Allocate texture memory
+            if (desc->flags & GPU_TCF_OWN_MEMORY_BIT)
+                mem_reqs.flags |= VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+
+            mem_reqs.usage = (VmaMemoryUsage)VMA_MEMORY_USAGE_GPU_ONLY;
+#ifdef USE_EXTERNAL_MEMORY_EXTENSIONS
+            VkExternalMemoryImageCreateInfo externalInfo = { VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO_KHR, NULL };
+            VkExportMemoryAllocateInfo exportMemoryInfo  = { VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO_KHR, NULL };
+    #if defined(VK_USE_PLATFORM_WIN32_KHR)
+            wchar_t* win32Name                                     = CGPU_NULLPTR;
+            const wchar_t* nameFormat                              = L"cgpu-shared-texture-%llu";
+            VkImportMemoryWin32HandleInfoKHR win32ImportInfo       = { VK_STRUCTURE_TYPE_IMPORT_MEMORY_WIN32_HANDLE_INFO_KHR, NULL };
+            VkExportMemoryWin32HandleInfoKHR win32ExportMemoryInfo = { VK_STRUCTURE_TYPE_EXPORT_MEMORY_WIN32_HANDLE_INFO_KHR, NULL };
+    #endif
+            if (A->external_memory && (desc->flags & CGPU_INNER_TCF_IMPORT_SHARED_HANDLE))
+            {
+                is_imported           = true;
+                imageCreateInfo.pNext = &externalInfo;
+    #if defined(VK_USE_PLATFORM_WIN32_KHR)
+                CGPUImportTextureDescriptor* pImportDesc = (CGPUImportTextureDescriptor*)desc->native_handle;
+                externalInfo.handleTypes                 = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
+                if (pImportDesc->backend == CGPU_BACKEND_D3D12)
+                {
+                    externalInfo.handleTypes   = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT;
+                    win32ImportInfo.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT;
+                }
+                if (pImportDesc->backend == CGPU_BACKEND_VULKAN)
+                {
+                    externalInfo.handleTypes   = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
+                    win32ImportInfo.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
+                }
+                // format name wstring
+                unique_id       = pImportDesc->shared_handle;
+                int size_needed = swprintf(CGPU_NULL, 0, nameFormat, unique_id);
+                win32Name       = cgpu_calloc(1 + size_needed, sizeof(wchar_t));
+                swprintf(win32Name, 1 + size_needed, nameFormat, unique_id);
+                // record import info
+                win32ImportInfo.handle = NULL;
+                win32ImportInfo.name   = win32Name;
+                // Allocate external (importable / exportable) memory as dedicated memory to avoid adding unnecessary complexity to the Vulkan Memory Allocator
+                uint32_t memoryType = 0;
+                VkResult findResult = vmaFindMemoryTypeIndexForImageInfo(D->pVmaAllocator, &imageCreateInfo, &mem_reqs, &memoryType);
+                if (findResult != VK_SUCCESS)
+                {
+                    cgpu_error("Failed to find memory type for image");
+                }
+                // import memory
+                VkResult importRes = D->mVkDeviceTable.vkCreateImage(D->pVkDevice, &imageCreateInfo, GLOBAL_VkAllocationCallbacks, &pVkImage);
+                CHECK_VKRESULT(importRes);
+                VkMemoryDedicatedRequirements MemoryDedicatedRequirements   = { VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS };
+                VkMemoryRequirements2 MemoryRequirements2                   = { VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2 };
+                MemoryRequirements2.pNext                                   = &MemoryDedicatedRequirements;
+                VkImageMemoryRequirementsInfo2 ImageMemoryRequirementsInfo2 = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2 };
+                ImageMemoryRequirementsInfo2.image                          = pVkImage;
+                // WARN: Memory access violation unless validation instance layer is enabled, otherwise success but...
+                D->mVkDeviceTable.vkGetImageMemoryRequirements2(D->pVkDevice, &ImageMemoryRequirementsInfo2, &MemoryRequirements2);
+                VkMemoryAllocateInfo importAllocation = {
+                    .sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+                    .allocationSize  = MemoryRequirements2.memoryRequirements.size, // this is valid for import allocations
+                    .memoryTypeIndex = memoryType,
+                    .pNext           = &win32ImportInfo
+                };
+                cgpu_info("Importing external memory %ls allocation of size %llu", win32Name, importAllocation.allocationSize);
+                importRes = D->mVkDeviceTable.vkAllocateMemory(D->pVkDevice, &importAllocation, GLOBAL_VkAllocationCallbacks, &pVkDeviceMemory);
+                CHECK_VKRESULT(importRes);
+                // bind memory
+                importRes = D->mVkDeviceTable.vkBindImageMemory(D->pVkDevice, pVkImage, pVkDeviceMemory, 0);
+                CHECK_VKRESULT(importRes);
+                if (importRes == VK_SUCCESS)
+                {
+                    cgpu_trace("Imported image %p with allocation %p", pVkImage, pVkDeviceMemory);
+                }
+    #endif
+            }
+            else if (A->external_memory && desc->flags & CGPU_TCF_EXPORT_BIT)
+            {
+                imageCreateInfo.pNext = &externalInfo;
+    #if defined(VK_USE_PLATFORM_WIN32_KHR)
+                const VkExternalMemoryHandleTypeFlags exportFlags =
+                VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT |
+                VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT | VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_HEAP_BIT;
+                externalInfo.handleTypes = exportFlags;
+                // format name wstring
+                uint64_t pid       = (uint64_t)GetCurrentProcessId();
+                uint64_t shared_id = D->next_shared_id++;
+                unique_id          = (pid << 32) | shared_id;
+                int size_needed    = swprintf(CGPU_NULL, 0, nameFormat, unique_id);
+                win32Name          = cgpu_calloc(1 + size_needed, sizeof(wchar_t));
+                swprintf(win32Name, 1 + size_needed, nameFormat, unique_id);
+                // record export info
+                win32ExportMemoryInfo.dwAccess    = GENERIC_ALL;
+                win32ExportMemoryInfo.name        = win32Name;
+                win32ExportMemoryInfo.pAttributes = CGPU_NULLPTR;
+                exportMemoryInfo.pNext            = &win32ExportMemoryInfo;
+                exportMemoryInfo.handleTypes      = exportFlags;
+                cgpu_trace("Exporting texture with name %ls size %dx%dx%d", win32Name, desc->width, desc->height, desc->depth);
+    #else
+                exportMemoryInfo.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT;
+    #endif
+                // mem_reqs.pUserData = &exportMemoryInfo;
+                uint32_t memoryType = 0;
+                VkResult findResult = vmaFindMemoryTypeIndexForImageInfo(D->pVmaAllocator, &imageCreateInfo, &mem_reqs, &memoryType);
+                if (findResult != VK_SUCCESS)
+                {
+                    cgpu_error("Failed to find memory type for image");
+                }
+                if (D->pExternalMemoryVmaPools[memoryType] == CGPU_NULLPTR)
+                {
+                    D->pExternalMemoryVmaPoolNexts[memoryType] = cgpu_calloc(1, sizeof(VkExportMemoryAllocateInfoKHR));
+                    VkExportMemoryAllocateInfoKHR* Next        = (VkExportMemoryAllocateInfoKHR*)D->pExternalMemoryVmaPoolNexts[memoryType];
+                    Next->sType                                = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO_KHR;
+                    VmaPoolCreateInfo poolCreateInfo           = {
+                                  .memoryTypeIndex     = memoryType,
+                                  .blockSize           = 0,
+                                  .maxBlockCount       = 1024,
+                                  .pMemoryAllocateNext = D->pExternalMemoryVmaPoolNexts[memoryType]
+                    };
+                    if (vmaCreatePool(D->pVmaAllocator, &poolCreateInfo, &D->pExternalMemoryVmaPools[memoryType]) != VK_SUCCESS)
+                    {
+                        cgpu_assert(0 && "Failed to create VMA Pool");
+                    }
+                }
+                memcpy(D->pExternalMemoryVmaPoolNexts[memoryType], &exportMemoryInfo, sizeof(VkExportMemoryAllocateInfoKHR));
+                mem_reqs.pool = D->pExternalMemoryVmaPools[memoryType];
+                // Allocate external (importable / exportable) memory as dedicated memory to avoid adding unnecessary complexity to the Vulkan Memory Allocator
+                mem_reqs.flags |= VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+            }
+#endif
+            // Do allocation if is not imported
+            if (!is_imported)
+            {
+                VmaAllocationInfo alloc_info = { 0 };
+                if (isSinglePlane)
+                {
+                    if (!desc->is_dedicated && !is_imported && !(desc->flags & GPU_TCF_EXPORT_BIT))
+                    {
+                        mem_reqs.flags |= VMA_ALLOCATION_CREATE_CAN_ALIAS_BIT;
+                    }
+                    VkResult res = vmaCreateImage(D->pVmaAllocator,
+                                                  &imageCreateInfo, &mem_reqs, &pVkImage,
+                                                  &vmaAllocation, &alloc_info);
+                    assert(res == VK_SUCCESS);
+                }
+                else // Multi-planar formats
+                {
+                    // TODO: Planar formats
+                }
+            }
+//#ifdef VK_USE_PLATFORM_WIN32_KHR
+//            cgpu_free(win32Name);
+//#endif
+            is_dedicated    = mem_reqs.flags & VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+            can_alias_alloc = mem_reqs.flags & VMA_ALLOCATION_CREATE_CAN_ALIAS_BIT;
+        }
+    }
+    GPUTexture_Vulkan* T = (GPUTexture_Vulkan*)_aligned_malloc(totalSize, _alignof(GPUTexture_Vulkan));
+    memset(T, 0, totalSize);
+    assert(T);
+    T->super.ownsImage   = owns_image;
+    T->super.aspectMask  = aspect_mask;
+    T->super.isDedicated  = is_dedicated;
+    T->super.isAliasing  = desc->is_aliasing;
+    T->super.canAlias    = can_alias_alloc || desc->is_aliasing;
+    T->pVkImage           = pVkImage;
+    if (pVkDeviceMemory) T->pVkDeviceMemory = pVkDeviceMemory;
+    if (vmaAllocation) T->pVkAllocation = vmaAllocation;
+    T->super.sampleCount         = desc->sample_count;
+    T->super.width                = desc->width;
+    T->super.height               = desc->height;
+    T->super.depth                = desc->depth;
+    T->super.mipLevels           = desc->mip_levels;
+    T->super.isCube              = cubemapRequired;
+    T->super.arraySizeMinusOne = arraySize - 1;
+    T->super.format               = desc->format;
+    T->super.isImported          = is_imported;
+    //T->super.uniqueId            = (unique_id == UINT64_MAX) ? D->spuer.nextTextureId++ : unique_id;
+    // Set Texture Name
+    //VkUtil_OptionalSetObjectName(D, (uint64_t)T->pVkImage, VK_OBJECT_TYPE_IMAGE, desc->name);
+    // Start state
+    if (Q && T->pVkImage != VK_NULL_HANDLE && T->pVkAllocation != VK_NULL_HANDLE)
+    {
+        GPUResetCommandPool(Q->pInnerCmdPool);
+        GPUCmdBegin(Q->pInnerCmdBuffer);
+        GPUTextureBarrier init_barrier = {
+            .texture   = &T->super,
+            .src_state = GPU_RESOURCE_STATE_UNDEFINED,
+            .dst_state = desc->start_state
+        };
+        GPUResourceBarrierDescriptor init_barrier_d = {
+            .texture_barriers       = &init_barrier,
+            .texture_barriers_count = 1
+        };
+        GPUCmdResourceBarrier(Q->pInnerCmdBuffer, &init_barrier_d);
+        GPUCmdEnd(Q->pInnerCmdBuffer);
+        GPUQueueSubmitDescriptor barrier_submit = {
+            .cmds         = &Q->pInnerCmdBuffer,
+            .signal_fence = Q->pInnerFence,
+            .cmds_count   = 1
+        };
+        GPUSubmitQueue(&Q->super, &barrier_submit);
+        GPUWaitFences(&Q->pInnerFence, 1);
+    }
+    return &T->super;
+}
+
+void GPUFreeTexture_Vulkan(GPUTextureID texture)
+{
+    GPUDevice_Vulkan* D  = (GPUDevice_Vulkan*)texture->pDevice;
+    GPUTexture_Vulkan* T = (GPUTexture_Vulkan*)texture;
+    if (T->pVkImage != VK_NULL_HANDLE)
+    {
+        if (T->super.isImported)
+        {
+            D->mVkDeviceTable.vkDestroyImage(D->pDevice, T->pVkImage, GLOBAL_VkAllocationCallbacks);
+            D->mVkDeviceTable.vkFreeMemory(D->pDevice, T->pVkDeviceMemory, GLOBAL_VkAllocationCallbacks);
+        }
+        else if (T->super.ownsImage)
+        {
+            const EGPUFormat fmt = (EGPUFormat)texture->format;
+            (void)fmt;
+            // TODO: Support planar formats
+            const bool isSinglePlane = true;
+            if (isSinglePlane)
+            {
+                /*cgpu_trace("Freeing texture allocation %p \n\t size: %dx%dx%d owns_image: %d imported: %d",
+                           T->pVkImage, texture->width, texture->height, texture->depth, T->super.owns_image, T->super.is_imported);*/
+
+                vmaDestroyImage(D->pVmaAllocator, T->pVkImage, T->pVkAllocation);
+            }
+            else
+            {
+                D->mVkDeviceTable.vkDestroyImage(D->pDevice, T->pVkImage, GLOBAL_VkAllocationCallbacks);
+                D->mVkDeviceTable.vkFreeMemory(D->pDevice, T->pVkDeviceMemory, GLOBAL_VkAllocationCallbacks);
+            }
+        }
+        else
+        {
+            /*cgpu_trace("Freeing texture %p \n\t size: %dx%dx%d owns_image: %d imported: %d",
+                       T->pVkImage, texture->width, texture->height, texture->depth, T->super.owns_image, T->super.is_imported);*/
+
+            D->mVkDeviceTable.vkDestroyImage(D->pDevice, T->pVkImage, GLOBAL_VkAllocationCallbacks);
+        }
+    }
+    _aligned_free(T);
+}
+
 GPUShaderLibraryID GPUCreateShaderLibrary_Vulkan(GPUDeviceID pDevice, const GPUShaderLibraryDescriptor* pDesc)
 {
     GPUDevice_Vulkan* pVkDevice = (GPUDevice_Vulkan*)pDevice;
@@ -1542,7 +1944,7 @@ GPURootSignatureID GPUCreateRootSignature_Vulkan(GPUDeviceID device, const struc
                 }
             }
             uint32_t bindings_count                  = param_table ? param_table->resources_count + desc->static_sampler_count : 0 + desc->static_sampler_count;
-            VkDescriptorSetLayoutBinding* vkbindings = (VkDescriptorSetLayoutBinding*)malloc(bindings_count * sizeof(VkDescriptorSetLayoutBinding));
+            VkDescriptorSetLayoutBinding* vkbindings = (VkDescriptorSetLayoutBinding*)calloc(bindings_count, sizeof(VkDescriptorSetLayoutBinding));
             uint32_t i_binding = 0;
             // bindings
             if (param_table)
@@ -1581,12 +1983,7 @@ GPURootSignatureID GPUCreateRootSignature_Vulkan(GPUDeviceID device, const struc
                                                                  GLOBAL_VkAllocationCallbacks,
                                                                  &RS->pSetLayouts[set_index].pLayout) == VK_SUCCESS);
             //vkAllocateDescriptorSets
-            VkDescriptorSetAllocateInfo setsAllocInfo{};
-            setsAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-            setsAllocInfo.descriptorPool = D->pDescriptorPool->pVkDescPool;
-            setsAllocInfo.descriptorSetCount = 1;
-            setsAllocInfo.pSetLayouts        = &RS->pSetLayouts[set_index].pLayout;
-            assert(D->mVkDeviceTable.vkAllocateDescriptorSets(D->pDevice, &setsAllocInfo, &RS->pSetLayouts[set_index].pEmptyDescSet) == VK_SUCCESS);
+            VulkanUtil_ConsumeDescriptorSets(D->pDescriptorPool, &RS->pSetLayouts[set_index].pLayout, &RS->pSetLayouts[set_index].pEmptyDescSet, 1);
 
             if (bindings_count) free(vkbindings);
         }
@@ -1859,6 +2256,7 @@ void CGPUUtil_InitRSParamTables(GPURootSignature* RS, const struct GPURootSignat
     // Slice
     RS->table_count      = (uint32_t)valid_sets.size();
     RS->tables           = (GPUParameterTable*)malloc(RS->table_count * sizeof(GPUParameterTable));
+    if (RS->table_count == 0) RS->tables = nullptr;
     uint32_t table_index = 0;
     for (auto set_index : valid_sets)
     {
@@ -2201,6 +2599,43 @@ void GPUCmdResourceBarrier_Vulkan(GPUCommandBufferID cmd, const GPUResourceBarri
             0, NULL,
             bufferBarrierCount, BBs,
             imageBarrierCount, TBs);
+    }
+}
+
+void GPUCmdTransferBufferToTexture_Vulkan(GPUCommandBufferID cmd, const struct GPUBufferToTextureTransfer* desc)
+{
+    GPUCommandBuffer_Vulkan* Cmd = (GPUCommandBuffer_Vulkan*)cmd;
+    GPUDevice_Vulkan* D          = (GPUDevice_Vulkan*)cmd->device;
+    GPUTexture_Vulkan* Dst       = (GPUTexture_Vulkan*)desc->dst;
+    GPUBuffer_Vulkan* Src        = (GPUBuffer_Vulkan*)desc->src;
+    const bool isSinglePlane     = true;
+    const EGPUFormat fmt         = (EGPUFormat)desc->dst->format;
+    if (isSinglePlane)
+    {
+        const uint32_t width  = gpu_max(1, desc->dst->width >> desc->dst_subresource.mip_level);
+        const uint32_t height = gpu_max(1, desc->dst->height >> desc->dst_subresource.mip_level);
+        const uint32_t depth  = gpu_max(1, desc->dst->depth >> desc->dst_subresource.mip_level);
+
+        const uint32_t xBlocksCount = width / 1;//TODO: FormatUtil_WidthOfBlock
+        const uint32_t yBlocksCount = height / 1;
+
+        VkBufferImageCopy copy = {};
+        copy.bufferOffset                    = desc->src_offset;
+        copy.bufferRowLength                 = xBlocksCount * 1;// 指定像素在内存中的布局方式, 指定0表示像素紧密打包
+        copy.bufferImageHeight               = yBlocksCount * 1;// 指定像素在内存中的布局方式, 指定0表示像素紧密打包
+        copy.imageSubresource.aspectMask     = (VkImageAspectFlags)desc->dst->aspectMask;
+        copy.imageSubresource.mipLevel       = desc->dst_subresource.mip_level;
+        copy.imageSubresource.baseArrayLayer = desc->dst_subresource.base_array_layer;
+        copy.imageSubresource.layerCount     = desc->dst_subresource.layer_count;
+        copy.imageOffset.x                   = 0;
+        copy.imageOffset.y                   = 0;
+        copy.imageOffset.z                   = 0;
+        copy.imageExtent.width               = width;
+        copy.imageExtent.height              = height;
+        copy.imageExtent.depth               = depth;
+        D->mVkDeviceTable.vkCmdCopyBufferToImage(Cmd->pVkCmd,
+                                                 Src->pVkBuffer, Dst->pVkImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
+                                                 &copy);
     }
 }
 
@@ -2604,4 +3039,185 @@ void GPUTransferBufferToBuffer_Vulkan(GPUCommandBufferID cmd, const struct GPUBu
         .size      = desc->size
     };
     D->mVkDeviceTable.vkCmdCopyBuffer(Cmd->pVkCmd, Src->pVkBuffer, Dst->pVkBuffer, 1, &region);
+}
+
+GPUSamplerID GPUCreateSampler_Vulkan(GPUDeviceID device, const struct GPUSamplerDescriptor* desc)
+{
+    GPUDevice_Vulkan* D = (GPUDevice_Vulkan*)device;
+    GPUSampler_Vulkan* sampler = (GPUSampler_Vulkan*)_aligned_malloc(sizeof(GPUSampler_Vulkan), _alignof(GPUSampler_Vulkan));
+    memset(sampler, 0, sizeof(GPUSampler_Vulkan));
+    VkSamplerCreateInfo info{};
+    info.sType                   = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    info.minFilter               = VulkanUtil_TranslateFilterType(desc->min_filter);
+    info.magFilter               = VulkanUtil_TranslateFilterType(desc->mag_filter);
+    info.mipmapMode              = VulkanUtil_TranslateMipMapMode(desc->mipmap_mode);
+    info.addressModeU            = VulkanUtil_TranslateAddressMode(desc->address_u);
+    info.addressModeV            = VulkanUtil_TranslateAddressMode(desc->address_v);
+    info.addressModeW            = VulkanUtil_TranslateAddressMode(desc->address_w);
+    info.mipLodBias              = desc->mip_lod_bias;
+    info.anisotropyEnable        = desc->max_anisotropy > 0.0f ? VK_TRUE : VK_FALSE;
+    info.maxAnisotropy           = desc->max_anisotropy;
+    info.compareEnable           = desc->compare_func != GPU_CMP_NEVER ? VK_TRUE : VK_FALSE;
+    info.compareOp               = gVkCompareOpTranslator[desc->compare_func];
+    info.minLod                  = 0.0f;
+    info.maxLod                  = ((desc->mipmap_mode == GPU_MIPMAP_MODE_LINEAR) ? FLT_MAX : 0.0f);
+    info.borderColor             = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
+    info.unnormalizedCoordinates = VK_FALSE;
+    VkResult rs = D->mVkDeviceTable.vkCreateSampler(D->pDevice, &info, GLOBAL_VkAllocationCallbacks, &sampler->pSampler);
+    assert(rs == VK_SUCCESS);
+    return &sampler->super;
+}
+
+void GPUFreeSampler_Vulkan(GPUSamplerID sampler)
+{
+    GPUDevice_Vulkan* D  = (GPUDevice_Vulkan*)sampler->device;
+    GPUSampler_Vulkan* S = (GPUSampler_Vulkan*)sampler;
+    D->mVkDeviceTable.vkDestroySampler(D->pDevice, S->pSampler, GLOBAL_VkAllocationCallbacks);
+    _aligned_free(S);
+}
+
+GPUDescriptorSetID GPUCreateDescriptorSet_Vulkan(GPUDeviceID device, const struct GPUDescriptorSetDescriptor* desc)
+{
+    size_t totalSize            = sizeof(GPUDescriptorSet_Vulkan);
+    GPURootSignature_Vulkan* RS = (GPURootSignature_Vulkan*)desc->root_signature;
+    uint32_t table_index        = 0;
+    for (uint32_t i = 0; i < RS->super.table_count; i++)
+    {
+        if (RS->super.tables[i].set_index == desc->set_index)
+        {
+            table_index = i;
+        }
+    }
+    SetLayout_Vulkan* SetLayout     = &RS->pSetLayouts[desc->set_index];
+    const GPUDevice_Vulkan* D       = (GPUDevice_Vulkan*)device;
+    const size_t UpdateTemplateSize = RS->super.tables != nullptr ? RS->super.tables[table_index].resources_count * sizeof(VkDescriptorUpdateData) : 0;
+    totalSize += UpdateTemplateSize;
+    GPUDescriptorSet_Vulkan* Set = (GPUDescriptorSet_Vulkan*)_aligned_malloc(totalSize, _alignof(GPUDescriptorSet_Vulkan));
+    memset(Set, 0, totalSize);
+    char8_t* pMem = (char8_t*)(Set + 1);
+    // Allocate Descriptor Set
+    VulkanUtil_ConsumeDescriptorSets(D->pDescriptorPool, &SetLayout->pLayout, &Set->pSet, 1);
+    // Fill Update Template Data
+    Set->pUpdateData = (VkDescriptorUpdateData*)pMem;
+    memset(Set->pUpdateData, 0, UpdateTemplateSize);
+    return &Set->super;
+}
+
+void GPUFreeDescriptorSet_Vulkan(GPUDescriptorSetID set)
+{
+    GPUDescriptorSet_Vulkan* Set = (GPUDescriptorSet_Vulkan*)set;
+    GPUDevice_Vulkan* D          = (GPUDevice_Vulkan*)set->root_signature->device;
+    VulkanUtil_ReturnDescriptorSets(D->pDescriptorPool, &Set->pSet, 1);
+    _aligned_free(Set);
+}
+
+void GPUUpdateDescriptorSet_Vulkan(GPUDescriptorSetID set, const GPUDescriptorData* datas, uint32_t count)
+{
+    GPUDescriptorSet_Vulkan* Set = (GPUDescriptorSet_Vulkan*)set;
+    GPURootSignature_Vulkan* RS  = (GPURootSignature_Vulkan*)set->root_signature;
+    GPUDevice_Vulkan* D          = (GPUDevice_Vulkan*)set->root_signature->device;
+    uint32_t table_index          = 0;
+    for (uint32_t i = 0; i < RS->super.table_count; i++)
+    {
+        if (RS->super.tables[i].set_index == set->index)
+        {
+            table_index = i;
+        }
+    }
+    SetLayout_Vulkan* SetLayout         = &RS->pSetLayouts[set->index];
+    const GPUParameterTable* ParamTable = &RS->super.tables[table_index];
+    VkDescriptorUpdateData* pUpdateData = Set->pUpdateData;
+    memset(pUpdateData, 0, count * sizeof(VkDescriptorUpdateData));
+    bool dirty = false;
+    for (uint32_t i = 0; i < count; i++)
+    {
+        // Descriptor Info
+        const GPUDescriptorData* pParam  = datas + i;
+        const GPUShaderResource* ResData = nullptr;
+        if (pParam->name != nullptr)
+        {
+            //size_t argNameHash = cgpu_name_hash(pParam->name, strlen(pParam->name));
+            for (uint32_t p = 0; p < ParamTable->resources_count; p++)
+            {
+                if (strcmp((const char*)ParamTable->resources[p].name, (const char*)pParam->name) == 0)
+                {
+                    ResData = ParamTable->resources + p;
+                }
+            }
+        }
+        else
+        {
+            for (uint32_t p = 0; p < ParamTable->resources_count; p++)
+            {
+                if (ParamTable->resources[p].binding == pParam->binding)
+                {
+                    ResData = ParamTable->resources + p;
+                }
+            }
+        }
+        // Update Info
+        const uint32_t arrayCount           = pParam->count > 1U ? pParam->count : 1U;
+        const EGPUResourceType resourceType = (EGPUResourceType)ResData->type;
+        switch (resourceType)
+        {
+            case GPU_RESOURCE_TYPE_RW_TEXTURE:
+            case GPU_RESOURCE_TYPE_TEXTURE: {
+                assert(pParam->textures && "cgpu_assert: Binding NULL texture(s)");
+                GPUTextureView_Vulkan** TextureViews = (GPUTextureView_Vulkan**)pParam->textures;
+                for (uint32_t arr = 0; arr < arrayCount; ++arr)
+                {
+                    // TODO: Stencil support
+                    assert(pParam->textures[arr] && "cgpu_assert: Binding NULL texture!");
+                    VkDescriptorUpdateData* Data = &pUpdateData[ResData->binding + arr];
+                    Data->mImageInfo.imageView   = ResData->type == GPU_RESOURCE_TYPE_RW_TEXTURE ? TextureViews[arr]->pVkUAVDescriptor : TextureViews[arr]->pVkSRVDescriptor;
+                    Data->mImageInfo.imageLayout = ResData->type == GPU_RESOURCE_TYPE_RW_TEXTURE ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                    Data->mImageInfo.sampler     = VK_NULL_HANDLE;
+                    dirty                        = true;
+                }
+                break;
+            }
+            case GPU_RESOURCE_TYPE_SAMPLER: {
+                assert(pParam->samplers && "cgpu_assert: Binding NULL Sampler(s)");
+                GPUSampler_Vulkan** Samplers = (GPUSampler_Vulkan**)pParam->samplers;
+                for (uint32_t arr = 0; arr < arrayCount; ++arr)
+                {
+                    assert(pParam->samplers[arr] && "cgpu_assert: Binding NULL Sampler!");
+                    VkDescriptorUpdateData* Data = &pUpdateData[ResData->binding + arr];
+                    Data->mImageInfo.sampler     = Samplers[arr]->pSampler;
+                    dirty                        = true;
+                }
+                break;
+            }
+            case GPU_RESOURCE_TYPE_UNIFORM_BUFFER:
+            case GPU_RESOURCE_TYPE_BUFFER:
+            case GPU_RESOURCE_TYPE_BUFFER_RAW:
+            case GPU_RESOURCE_TYPE_RW_BUFFER:
+            case GPU_RESOURCE_TYPE_RW_BUFFER_RAW: {
+                assert(pParam->buffers && "cgpu_assert: Binding NULL Buffer(s)!");
+                GPUBuffer_Vulkan** Buffers = (GPUBuffer_Vulkan**)pParam->buffers;
+                for (uint32_t arr = 0; arr < arrayCount; ++arr)
+                {
+                    assert(pParam->buffers[arr] && "cgpu_assert: Binding NULL Buffer!");
+                    VkDescriptorUpdateData* Data = &pUpdateData[ResData->binding + arr];
+                    Data->mBufferInfo.buffer     = Buffers[arr]->pVkBuffer;
+                    Data->mBufferInfo.offset     = Buffers[arr]->mOffset;
+                    Data->mBufferInfo.range      = VK_WHOLE_SIZE;
+                    if (pParam->buffers_params.offsets)
+                    {
+                        Data->mBufferInfo.offset = pParam->buffers_params.offsets[arr];
+                        Data->mBufferInfo.range  = pParam->buffers_params.sizes[arr];
+                    }
+                    dirty = true;
+                }
+                break;
+            }
+            default:
+                assert(0 && ResData->type && "Descriptor Type not supported!");
+                break;
+        }
+    }
+    if (dirty)
+    {
+        D->mVkDeviceTable.vkUpdateDescriptorSetWithTemplateKHR(D->pDevice, Set->pSet, SetLayout->pUpdateTemplate, Set->pUpdateData);
+    }
 }

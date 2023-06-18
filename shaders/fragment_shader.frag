@@ -8,6 +8,8 @@
 
 //layout(set = 0, binding = 4) uniform ubo2 {mat4 inputPosition;}uo2;
 
+layout(set = 0, binding = 0) uniform sampler2D tex;
+
 layout(location=0) out vec4 outClor;
 layout(location = 0) in vec3 frColor;
 void main()

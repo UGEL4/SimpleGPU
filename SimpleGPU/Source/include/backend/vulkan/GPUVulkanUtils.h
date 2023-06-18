@@ -22,6 +22,7 @@ extern "C" {
     void VulkanUtil_SelectQueueFamilyIndex(GPUAdapter_Vulkan* pAdapter);
     void VulkanUtil_SelectPhysicalDeviceExtensions(GPUAdapter_Vulkan* pAdapter, const char** ppExtensions, uint32_t extensionsCount);
     void VulkanUtil_EnumFormatSupport(GPUAdapter_Vulkan* pAdapter);
+    void VulkanUtil_RecordAdaptorDetail(GPUAdapter_Vulkan* pAdapter);
 
     uint32_t VulkanUtil_BitSizeOfBlock(EGPUFormat format);
     VkSampleCountFlagBits VulkanUtil_SampleCountToVk(EGPUSampleCount sampleCount);
@@ -34,6 +35,8 @@ extern "C" {
 
     VkRenderPass VulkanUtil_RenderPassTableTryFind(struct GPUVkPassTable* table, const struct VulkanRenderPassDescriptor* desc);
     void VulkanUtil_RenderPassTableAdd(struct GPUVkPassTable* table, const struct VulkanRenderPassDescriptor* desc, VkRenderPass pass);
+    void VulkanUtil_ConsumeDescriptorSets(VkUtil_DescriptorPool* pool, const VkDescriptorSetLayout* pLayouts, VkDescriptorSet* pSets, uint32_t setsNum);
+    void VulkanUtil_ReturnDescriptorSets(struct VkUtil_DescriptorPool* pPool, VkDescriptorSet* pSets, uint32_t setsNum);
 
     inline static VkShaderStageFlags VulkanUtil_TranslateShaderUsages(GPUShaderStages shader_stages)
     {
@@ -413,6 +416,106 @@ extern "C" {
             result |= VK_BUFFER_USAGE_RAY_TRACING_BIT_NV;
         }
 #endif
+        return result;
+    }
+
+    inline static VkBufferUsageFlags VulkanUtil_DescriptorTypesToImageUsage(GPUResourceTypes descriptors)
+    {
+        VkImageUsageFlags result = 0;
+        if (GPU_RESOURCE_TYPE_TEXTURE == (descriptors & GPU_RESOURCE_TYPE_TEXTURE))
+            result |= VK_IMAGE_USAGE_SAMPLED_BIT;
+        if (GPU_RESOURCE_TYPE_RW_TEXTURE == (descriptors & GPU_RESOURCE_TYPE_RW_TEXTURE))
+            result |= VK_IMAGE_USAGE_STORAGE_BIT;
+        return result;
+    }
+
+    static VkFilter VulkanUtil_TranslateFilterType(EGPUFilterType type)
+    {
+        switch (type)
+        {
+            case GPU_FILTER_TYPE_LINEAR:
+                return VK_FILTER_LINEAR;
+            case GPU_FILTER_TYPE_NEAREST:
+                return VK_FILTER_NEAREST;
+            default:
+                return VK_FILTER_LINEAR;
+        }
+    }
+
+    static VkSamplerMipmapMode VulkanUtil_TranslateMipMapMode(EGPUMipMapMode mode)
+    {
+        switch (mode)
+        {
+            case GPU_MIPMAP_MODE_LINEAR:
+                return VK_SAMPLER_MIPMAP_MODE_LINEAR;
+            case GPU_MIPMAP_MODE_NEAREST:
+                return VK_SAMPLER_MIPMAP_MODE_NEAREST;
+            default:
+                return VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        }
+    }
+    
+    static VkSamplerAddressMode VulkanUtil_TranslateAddressMode(EGPUAddressMode mode)
+    {
+        switch (mode)
+        {
+            case GPU_ADDRESS_MODE_MIRROR:
+                return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+            case GPU_ADDRESS_MODE_REPEAT:
+                return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+            case GPU_ADDRESS_MODE_CLAMP_TO_EDGE:
+                return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            case GPU_ADDRESS_MODE_CLAMP_TO_BORDER:
+                return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+            default:
+                return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        }
+    }
+
+    static const VkCompareOp gVkCompareOpTranslator[GPU_CMP_COUNT] = {
+        VK_COMPARE_OP_NEVER,
+        VK_COMPARE_OP_LESS,
+        VK_COMPARE_OP_EQUAL,
+        VK_COMPARE_OP_LESS_OR_EQUAL,
+        VK_COMPARE_OP_GREATER,
+        VK_COMPARE_OP_NOT_EQUAL,
+        VK_COMPARE_OP_GREATER_OR_EQUAL,
+        VK_COMPARE_OP_ALWAYS,
+    };
+
+    static inline bool FormatUtil_IsDepthStencilFormat(EGPUFormat const fmt)
+    {
+        switch (fmt)
+        {
+            case GPU_FORMAT_D24_UNORM_S8_UINT:
+            case GPU_FORMAT_D32_SFLOAT_S8_UINT:
+            case GPU_FORMAT_D16_UNORM_S8_UINT:
+                return true;
+            default:
+                return false;
+        }
+        return false;
+    }
+
+    static VkFormatFeatureFlags VulkanUtil_ImageUsageToFormatFeatures(VkImageUsageFlags usage)
+    {
+        VkFormatFeatureFlags result = (VkFormatFeatureFlags)0;
+        if (VK_IMAGE_USAGE_SAMPLED_BIT == (usage & VK_IMAGE_USAGE_SAMPLED_BIT))
+        {
+            result |= VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
+        }
+        if (VK_IMAGE_USAGE_STORAGE_BIT == (usage & VK_IMAGE_USAGE_STORAGE_BIT))
+        {
+            result |= VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT;
+        }
+        if (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT == (usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT))
+        {
+            result |= VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT;
+        }
+        if (VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT == (usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT))
+        {
+            result |= VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
+        }
         return result;
     }
 

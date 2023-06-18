@@ -4,6 +4,7 @@
 #include <iostream>
 #include <fstream>
 #include <filesystem>
+#include "texture.h"
 
 inline static void ReadBytes(const char8_t* file_name, uint32_t** bytes, uint32_t* length)
 {
@@ -74,6 +75,48 @@ HWND CreateWin32Window()
         return window;
     }
     return nullptr;
+}
+
+GPUTextureID CreateTexture(GPUDeviceID device, GPUQueueID queue)
+{
+    GPUTextureDescriptor desc{};
+    desc.flags = GPU_TCF_OWN_MEMORY_BIT;
+    desc.width = TEXTURE_WIDTH;
+    desc.height = TEXTURE_HEIGHT;
+    desc.depth  = 1;
+    desc.array_size = 1;
+    desc.format     = GPU_FORMAT_R8G8BA8_UNORM;
+    desc.owner_queue = queue;
+    desc.start_state = GPU_RESOURCE_STATE_COPY_DEST;
+    desc.descriptors = GPU_RESOURCE_TYPE_TEXTURE;
+    return GPUCreateTexture(device, &desc);
+}
+
+GPUTextureViewID CreateTextureView(GPUTextureID texture)
+{
+    GPUTextureViewDescriptor desc{};
+    desc.pTexture        = texture;
+    desc.format          = (EGPUFormat)texture->format;
+    desc.usage           = EGPUTexutreViewUsage::GPU_TVU_SRV;
+    desc.aspectMask      = EGPUTextureViewAspect::GPU_TVA_COLOR;
+    desc.baseMipLevel    = 0;
+    desc.mipLevelCount   = 1;
+    desc.baseArrayLayer  = 0;
+    desc.arrayLayerCount = 1;
+    return GPUCreateTextureView(texture->pDevice, &desc);
+}
+
+GPUSamplerID CreateTextureSampler(GPUDeviceID device)
+{
+    GPUSamplerDescriptor desc{};
+    desc.min_filter = GPU_FILTER_TYPE_LINEAR;
+    desc.mag_filter = GPU_FILTER_TYPE_LINEAR;
+    desc.mipmap_mode = GPU_MIPMAP_MODE_LINEAR;
+    desc.address_u   = GPU_ADDRESS_MODE_REPEAT;
+    desc.address_v  = GPU_ADDRESS_MODE_REPEAT;
+    desc.address_w   = GPU_ADDRESS_MODE_REPEAT;
+    desc.compare_func = GPU_CMP_NEVER;
+    return GPUCreateSampler(device, &desc);
 }
 
 int main(int argc, char** argv)
@@ -166,6 +209,10 @@ int main(int argc, char** argv)
     rootRSDesc.shaders                        = shaderEntries;
     rootRSDesc.shader_count                   = 2;
     GPURootSignatureID pRS                    = GPUCreateRootSignature(device, &rootRSDesc);
+    GPUDescriptorSetDescriptor set_desc{};
+    set_desc.root_signature = pRS;
+    set_desc.set_index      = 0;
+    GPUDescriptorSetID set  = GPUCreateDescriptorSet(device, &set_desc);
     GPUVertexLayout vertexLayout{};
     vertexLayout.attributeCount = 2;
     vertexLayout.attributes[0]  = { 1, GPU_FORMAT_R32G32B32_SFLOAT, 0, 0, sizeof(float) * 3, GPU_INPUT_RATE_VERTEX };
@@ -181,6 +228,18 @@ int main(int argc, char** argv)
     GPURenderPipelineID pipeline   = GPUCreateRenderPipeline(device, &pipelineDesc);
     GPUFreeShaderLibrary(pVShader);
     GPUFreeShaderLibrary(pFShader);
+
+    GPUSamplerID texture_sampler = CreateTextureSampler(device);
+    GPUTextureID texture         = CreateTexture(device, pGraphicQueue);
+    GPUTextureViewID textureView = CreateTextureView(texture);
+
+    //update descriptorset
+    GPUDescriptorData desc_data{};
+    desc_data.name         = u8"Tex";
+    desc_data.binding      = 0;
+    desc_data.binding_type = GPU_RESOURCE_TYPE_TEXTURE;
+    desc_data.textures     = &textureView;
+    GPUUpdateDescriptorSet(set, &desc_data, 1);
 
     //render loop begin
     GPUCommandPoolID pool = GPUCreateCommandPool(pGraphicQueue);
@@ -200,7 +259,8 @@ int main(int argc, char** argv)
     Vertex vertices[] = {
         { 0.0f, -0.5f, 0.f, 1.f, 0.f, 0.f },
         { -0.5f, 0.5f, 0.f, 0.f, 1.f, 0.f },
-        { 0.5f, 0.5f, 0.f, 1.f, 0.f, 1.f }
+        { 0.5f, 0.5f, 0.f, 1.f, 0.f, 1.f },
+        { 0.f, 1.f, 0.f, 0.f, 0.f, 1.f }
     };
     /*Vertex vertices[] = {
         { 1.f, 0.f, 0.f, 0.f, 0.f, 1.f },
@@ -208,12 +268,38 @@ int main(int argc, char** argv)
         { 0.f, 0.f, 0.f, 0.f, 0.f, 0.f }
     };*/
     GPUBufferDescriptor upload_buffer{};
-    upload_buffer.size         = 1024;
+    upload_buffer.size         = sizeof(TEXTURE_DATA);
     upload_buffer.flags        = GPU_BCF_OWN_MEMORY_BIT | GPU_BCF_PERSISTENT_MAP_BIT;
     upload_buffer.descriptors  = GPU_RESOURCE_TYPE_NONE;
     upload_buffer.memory_usage = GPU_MEM_USAGE_CPU_ONLY;
     GPUBufferID uploadBuffer   = GPUCreateBuffer(device, &upload_buffer);
+    //copy texture
+    memcpy(uploadBuffer->cpu_mapped_address, TEXTURE_DATA, sizeof(TEXTURE_DATA));
+    GPUResetCommandPool(pool);
+    GPUCmdBegin(cmd);
+    {
+        GPUBufferToTextureTransfer trans_texture_buffer_desc{};
+        trans_texture_buffer_desc.dst                              = texture;
+        trans_texture_buffer_desc.dst_subresource.mip_level        = 0;
+        trans_texture_buffer_desc.dst_subresource.base_array_layer = 0;
+        trans_texture_buffer_desc.dst_subresource.layer_count      = 1;
+        trans_texture_buffer_desc.src                              = uploadBuffer;
+        trans_texture_buffer_desc.src_offset                       = 0;
+        GPUCmdTransferBufferToTexture(cmd, &trans_texture_buffer_desc);
+        GPUTextureBarrier barrier{};
+        barrier.texture = texture;
+        barrier.src_state = GPU_RESOURCE_STATE_COPY_DEST;
+        barrier.dst_state = GPU_RESOURCE_STATE_SHADER_RESOURCE;
+        GPUResourceBarrierDescriptor rs_barrer{};
+        rs_barrer.texture_barriers      = &barrier;
+        rs_barrer.texture_barriers_count = 1;
+        GPUCmdResourceBarrier(cmd, &rs_barrer);
+    }
+    GPUCmdEnd(cmd);
+    GPUQueueSubmitDescriptor texture_cpy_submit = { .cmds = &cmd, .cmds_count = 1 };
+    GPUSubmitQueue(pGraphicQueue, &texture_cpy_submit);
 
+    //vertex buffer
     GPUBufferDescriptor vertex_desc{};
     vertex_desc.size         = sizeof(vertices);
     vertex_desc.flags        = GPU_BCF_OWN_MEMORY_BIT;
@@ -246,8 +332,9 @@ int main(int argc, char** argv)
     GPUSubmitQueue(pGraphicQueue, &cpy_submit);
     GPUWaitQueueIdle(pGraphicQueue);
 
+    //index buffer
     uint16_t indices[] = {
-        0, 1, 2
+        0, 1, 2, 1, 3, 2
     };
     GPUBufferDescriptor index_desc{};
     index_desc.size         = sizeof(indices);
@@ -340,7 +427,7 @@ int main(int argc, char** argv)
                     GPURenderEncoderBindIndexBuffer(encoder, indexBuffer, 0, sizeof(uint16_t));
                     //bind descriptor ste
                     //GPURenderEncoderDraw(encoder, 3, 0);
-                    GPURenderEncoderDrawIndexed(encoder, 3, 0, 0);
+                    GPURenderEncoderDrawIndexed(encoder, sizeof(indices) / sizeof(uint16_t), 0, 0);
                 }
                 GPUCmdEndRenderPass(cmd, encoder);
 
@@ -377,6 +464,10 @@ int main(int argc, char** argv)
     {
         GPUFreeTextureView(ppSwapchainImage[i]);
     }
+    GPUFreeSampler(texture_sampler);
+    GPUFreeDescriptorSet(set);
+    GPUFreeTextureView(textureView);
+    GPUFreeTexture(texture);
     GPUFreeBuffer(vertexBuffer);
     GPUFreeBuffer(indexBuffer);
     GPUFreeCommandBuffer(cmd);

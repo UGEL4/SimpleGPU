@@ -81,7 +81,10 @@ extern "C" {
         GPU_FORMAT_R32_SFLOAT,
         GPU_FORMAT_R32G32_SFLOAT,
         GPU_FORMAT_R32G32B32_SFLOAT,
-		GPU_FORMT_COUNT
+        GPU_FORMAT_D16_UNORM_S8_UINT,
+        GPU_FORMAT_D24_UNORM_S8_UINT,
+        GPU_FORMAT_D32_SFLOAT_S8_UINT,
+		GPU_FORMAT_COUNT
 	} EGPUFormat;
 
 	typedef enum EGPUSampleCount
@@ -109,6 +112,7 @@ extern "C" {
         GPU_TVA_STENCIL      = 0x04,
         GPU_TVA_MAX_ENUM_BIT = 0x7FFFFFFF
     } EGPUTextureViewAspect;
+    typedef uint32_t GPUTextureViewAspects;
 
     // Same Value As Vulkan Enumeration Bits.
     typedef enum EGPUShaderStage
@@ -311,6 +315,101 @@ extern "C" {
     } EGPUBufferCreationFlag;
     typedef uint32_t CGPUBufferCreationFlags;
 
+    typedef enum EGPUFilterType
+    {
+        GPU_FILTER_TYPE_NEAREST = 0,
+        GPU_FILTER_TYPE_LINEAR,
+        GPU_FILTER_TYPE_MAX_ENUM_BIT = 0x7FFFFFFF
+    } CGPUFilterType;
+
+    typedef enum EGPUAddressMode
+    {
+        GPU_ADDRESS_MODE_MIRROR,
+        GPU_ADDRESS_MODE_REPEAT,
+        GPU_ADDRESS_MODE_CLAMP_TO_EDGE,
+        GPU_ADDRESS_MODE_CLAMP_TO_BORDER,
+        GPU_ADDRESS_MODE_MAX_ENUM_BIT = 0x7FFFFFFF
+    } EGPUAddressMode;
+
+    typedef enum EGPUMipMapMode
+    {
+        GPU_MIPMAP_MODE_NEAREST = 0,
+        GPU_MIPMAP_MODE_LINEAR,
+        GPU_MIPMAP_MODE_MAX_ENUM_BIT = 0x7FFFFFFF
+    } EGPUMipMapMode;
+
+    typedef enum EGPUResourceState
+    {
+        GPU_RESOURCE_STATE_UNDEFINED                  = 0,
+        GPU_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER = 0x1,
+        GPU_RESOURCE_STATE_INDEX_BUFFER               = 0x2,
+        GPU_RESOURCE_STATE_RENDER_TARGET              = 0x4,
+        GPU_RESOURCE_STATE_UNORDERED_ACCESS           = 0x8,
+        GPU_RESOURCE_STATE_DEPTH_WRITE                = 0x10,
+        GPU_RESOURCE_STATE_DEPTH_READ                 = 0x20,
+        GPU_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE  = 0x40,
+        GPU_RESOURCE_STATE_PIXEL_SHADER_RESOURCE      = 0x80,
+        GPU_RESOURCE_STATE_SHADER_RESOURCE            = 0x40 | 0x80,
+        GPU_RESOURCE_STATE_STREAM_OUT                 = 0x100,
+        GPU_RESOURCE_STATE_INDIRECT_ARGUMENT          = 0x200,
+        GPU_RESOURCE_STATE_COPY_DEST                  = 0x400,
+        GPU_RESOURCE_STATE_COPY_SOURCE                = 0x800,
+        GPU_RESOURCE_STATE_GENERIC_READ               = (((((0x1 | 0x2) | 0x40) | 0x80) | 0x200) | 0x800),
+        GPU_RESOURCE_STATE_PRESENT                    = 0x1000,
+        GPU_RESOURCE_STATE_COMMON                     = 0x2000,
+        GPU_RESOURCE_STATE_ACCELERATION_STRUCTURE     = 0x4000,
+        GPU_RESOURCE_STATE_SHADING_RATE_SOURCE        = 0x8000,
+        GPU_RESOURCE_STATE_RESOLVE_DEST               = 0x10000,
+        GPU_RESOURCE_STATE_MAX_ENUM_BIT               = 0x7FFFFFFF
+    } EGPUResourceState;
+    typedef uint32_t GPUResourceStates;
+
+        typedef enum EGPUResourceType
+    {
+        GPU_RESOURCE_TYPE_NONE    = 0,
+        GPU_RESOURCE_TYPE_SAMPLER = 0x00000001,
+        // SRV Read only texture
+        GPU_RESOURCE_TYPE_TEXTURE = (GPU_RESOURCE_TYPE_SAMPLER << 1),
+        /// RTV Texture
+        GPU_RESOURCE_TYPE_RENDER_TARGET = (GPU_RESOURCE_TYPE_TEXTURE << 1),
+        /// DSV Texture
+        GPU_RESOURCE_TYPE_DEPTH_STENCIL = (GPU_RESOURCE_TYPE_RENDER_TARGET << 1),
+        /// UAV Texture
+        GPU_RESOURCE_TYPE_RW_TEXTURE = (GPU_RESOURCE_TYPE_DEPTH_STENCIL << 1),
+        // SRV Read only buffer
+        GPU_RESOURCE_TYPE_BUFFER     = (GPU_RESOURCE_TYPE_RW_TEXTURE << 1),
+        GPU_RESOURCE_TYPE_BUFFER_RAW = (GPU_RESOURCE_TYPE_BUFFER | (GPU_RESOURCE_TYPE_BUFFER << 1)),
+        /// UAV Buffer
+        GPU_RESOURCE_TYPE_RW_BUFFER     = (GPU_RESOURCE_TYPE_BUFFER << 2),
+        GPU_RESOURCE_TYPE_RW_BUFFER_RAW = (GPU_RESOURCE_TYPE_RW_BUFFER | (GPU_RESOURCE_TYPE_RW_BUFFER << 1)),
+        /// CBV Uniform buffer
+        GPU_RESOURCE_TYPE_UNIFORM_BUFFER = (GPU_RESOURCE_TYPE_RW_BUFFER << 2),
+        /// Push constant / Root constant
+        GPU_RESOURCE_TYPE_PUSH_CONSTANT = (GPU_RESOURCE_TYPE_UNIFORM_BUFFER << 1),
+        /// IA
+        GPU_RESOURCE_TYPE_VERTEX_BUFFER   = (GPU_RESOURCE_TYPE_PUSH_CONSTANT << 1),
+        GPU_RESOURCE_TYPE_INDEX_BUFFER    = (GPU_RESOURCE_TYPE_VERTEX_BUFFER << 1),
+        GPU_RESOURCE_TYPE_INDIRECT_BUFFER = (GPU_RESOURCE_TYPE_INDEX_BUFFER << 1),
+        /// Cubemap SRV
+        GPU_RESOURCE_TYPE_TEXTURE_CUBE = (GPU_RESOURCE_TYPE_TEXTURE | (GPU_RESOURCE_TYPE_INDIRECT_BUFFER << 1)),
+        /// RTV / DSV per mip slice
+        GPU_RESOURCE_TYPE_RENDER_TARGET_MIP_SLICES = (GPU_RESOURCE_TYPE_INDIRECT_BUFFER << 2),
+        /// RTV / DSV per array slice
+        GPU_RESOURCE_TYPE_RENDER_TARGET_ARRAY_SLICES = (GPU_RESOURCE_TYPE_RENDER_TARGET_MIP_SLICES << 1),
+        /// RTV / DSV per depth slice
+        GPU_RESOURCE_TYPE_RENDER_TARGET_DEPTH_SLICES = (GPU_RESOURCE_TYPE_RENDER_TARGET_ARRAY_SLICES << 1),
+        GPU_RESOURCE_TYPE_RAY_TRACING                = (GPU_RESOURCE_TYPE_RENDER_TARGET_DEPTH_SLICES << 1),
+#if defined(GPU_USE_VULKAN)
+        /// Subpass input (descriptor type only available in Vulkan)
+        GPU_RESOURCE_TYPE_INPUT_ATTACHMENT       = (GPU_RESOURCE_TYPE_RAY_TRACING << 1),
+        GPU_RESOURCE_TYPE_TEXEL_BUFFER           = (GPU_RESOURCE_TYPE_INPUT_ATTACHMENT << 1),
+        GPU_RESOURCE_TYPE_RW_TEXEL_BUFFER        = (GPU_RESOURCE_TYPE_TEXEL_BUFFER << 1),
+        GPU_RESOURCE_TYPE_COMBINED_IMAGE_SAMPLER = (GPU_RESOURCE_TYPE_RW_TEXEL_BUFFER << 1),
+#endif
+        GPU_RESOURCE_TYPE_MAX_ENUM_BIT = 0x7FFFFFFF
+    } EGPUResourceType;
+    typedef uint32_t GPUResourceTypes;
+
 	//instance api
 	GPUInstanceID GPUCreateInstance(const struct GPUInstanceDescriptor* pDesc);
 	typedef GPUInstanceID (*GPUProcCreateInstance)(const struct GPUInstanceDescriptor* pDesc);
@@ -371,6 +470,10 @@ extern "C" {
     typedef GPUTextureViewID (*GPUProcCreateTextureView)(GPUDeviceID pDevice, const struct GPUTextureViewDescriptor* pDesc);
     void GPUFreeTextureView(GPUTextureViewID pTextureView);
     typedef void (*GPUProcFreeTextureView)(GPUTextureViewID pTextureView);
+    GPUTextureID GPUCreateTexture(GPUDeviceID device, const GPUTextureDescriptor* desc);
+    typedef GPUTextureID (*GPUProcCreateTexture)(GPUDeviceID device, const GPUTextureDescriptor* desc);
+    void GPUFreeTexture(GPUTextureID texture);
+    typedef void (*GPUProcFreeTexture)(GPUTextureID texture);
 
     //shader api
     GPUShaderLibraryID GPUCreateShaderLibrary(GPUDeviceID pDevice, const GPUShaderLibraryDescriptor* pDesc);
@@ -406,6 +509,8 @@ extern "C" {
     typedef void (*GPUProcCmdEnd)(GPUCommandBufferID cmdBuffer);
     void GPUCmdResourceBarrier(GPUCommandBufferID cmd, const struct GPUResourceBarrierDescriptor* desc);
     typedef void (*GPUProcCmdResourceBarrier)(GPUCommandBufferID cmd, const struct GPUResourceBarrierDescriptor* desc);
+    void GPUCmdTransferBufferToTexture(GPUCommandBufferID cmd, const struct GPUBufferToTextureTransfer* desc);
+    typedef void (*GPUProcCmdTransferBufferToTexture)(GPUCommandBufferID cmd, const struct GPUBufferToTextureTransfer* desc);
 
     //fence & semaphore
     GPUFenceID GPUCreateFence(GPUDeviceID device);
@@ -450,6 +555,19 @@ extern "C" {
     void GPUTransferBufferToBuffer(GPUCommandBufferID cmd, const struct GPUBufferToBufferTransfer* desc);
     typedef void (*GPUProcTransferBufferToBuffer)(GPUCommandBufferID cmd, const struct GPUBufferToBufferTransfer* desc);
 
+    //sampler
+    GPUSamplerID GPUCreateSampler(GPUDeviceID device, const struct GPUSamplerDescriptor* desc);
+    typedef GPUSamplerID (*GPUProcCreateSampler)(GPUDeviceID device, const struct GPUSamplerDescriptor* desc);
+    void GPUFreeSampler(GPUSamplerID sampler);
+    typedef void (*GPUProcFreeSampler)(GPUSamplerID sampler);
+
+    GPUDescriptorSetID GPUCreateDescriptorSet(GPUDeviceID device, const struct GPUDescriptorSetDescriptor* desc);
+    typedef GPUDescriptorSetID (*GPUProcCreateDescriptorSet)(GPUDeviceID device, const struct GPUDescriptorSetDescriptor* desc);
+    void GPUFreeDescriptorSet(GPUDescriptorSetID set);
+    typedef void (*GPUProcFreeDescriptorSet)(GPUDescriptorSetID set);
+    void GPUUpdateDescriptorSet(GPUDescriptorSetID set, const struct GPUDescriptorData* datas, uint32_t count);
+    typedef void (*GPUProcUpdateDescriptorSet)(GPUDescriptorSetID set, const struct GPUDescriptorData* datas, uint32_t count);
+
 	typedef struct GPUProcTable
 	{
 		//instance api
@@ -478,6 +596,8 @@ extern "C" {
         // texture & texture_view api
         const GPUProcCreateTextureView CreateTextureView;
         const GPUProcFreeTextureView FreeTextureView;
+        const GPUProcCreateTexture CreateTexture;
+        const GPUProcFreeTexture FreeTexture;
 
         //shader
         const GPUProcCreateShaderLibrary CreateShaderLibrary;
@@ -499,6 +619,7 @@ extern "C" {
         const GPUProcCmdBegin CmdBegin;
         const GPUProcCmdEnd CmdEnd;
         const GPUProcCmdResourceBarrier CmdResourceBarrier;
+        const GPUProcCmdTransferBufferToTexture CmdTransferBufferToTexture;
 
         //fence & semaphore
         const GPUProcCreateFence CreateFence;
@@ -522,6 +643,14 @@ extern "C" {
         const GPUProcCreateBuffer CreateBuffer;
         const GPUProcFreeBuffer FreeBuffer;
         const GPUProcTransferBufferToBuffer TransferBufferToBuffer;
+
+        //sampler
+        const GPUProcCreateSampler CreateSampler;
+        const GPUProcFreeSampler FreeSampler;
+
+        const GPUProcCreateDescriptorSet CreateDescriptorSet;
+        const GPUProcFreeDescriptorSet FreeDescriptorSet;
+        const GPUProcUpdateDescriptorSet UpdateDescriptorSet;
 	}GPUProcTable;
 
 	typedef struct CGPUChainedDescriptor {
@@ -544,9 +673,16 @@ extern "C" {
 		EGPUBackend backend;
 	} GPUInstance;
 
+    typedef struct GPUFormatSupport
+    {
+        uint8_t shader_read : 1;
+        uint8_t shader_write : 1;
+        uint8_t render_target_write : 1;
+    } GPUFormatSupport;
+
 	typedef struct GPUAdapterDetail
 	{
-
+        GPUFormatSupport format_supports[GPU_FORMAT_COUNT];
 	} GPUAdapterDetail;
 
 	typedef struct GPUAdapter
@@ -616,6 +752,89 @@ extern "C" {
         GPU_TEX_DIMENSION_MAX_ENUM_BIT = 0x7FFFFFFF
     } EGPUTextureDimension;
 
+    typedef enum EGPUTextureCreationFlag
+    {
+        /// Default flag (Texture will use default allocation strategy decided by the api specific allocator)
+        GPU_TCF_NONE = 0,
+        /// Texture will allocate its own memory (COMMITTED resource)
+        /// Note that this flag is not restricted Commited/Dedicated Allocation
+        /// Actually VMA/D3D12MA allocate dedicated memories with ALLOW_ALIAS flag with specific loacl heaps
+        /// If the texture needs to be restricted Committed/Dedicated(thus you want to keep its priority high)
+        /// Toogle is_dedicated flag in GPUTextureDescriptor
+        GPU_TCF_OWN_MEMORY_BIT = 0x01,
+        /// Texture will be allocated in memory which can be shared among multiple processes
+        GPU_TCF_EXPORT_BIT = 0x02,
+        /// Texture will be allocated in memory which can be shared among multiple gpus
+        GPU_TCF_EXPORT_ADAPTER_BIT = 0x04,
+        /// Use on-tile memory to store this texture
+        GPU_TCF_ON_TILE = 0x08,
+        /// Prevent compression meta data from generating (XBox)
+        GPU_TCF_NO_COMPRESSION = 0x10,
+        /// Force 2D instead of automatically determining dimension based on width, height, depth
+        GPU_TCF_FORCE_2D = 0x20,
+        /// Force 3D instead of automatically determining dimension based on width, height, depth
+        GPU_TCF_FORCE_3D = 0x40,
+        /// Display target
+        GPU_TCF_ALLOW_DISPLAY_TARGET = 0x80,
+        /// Create a normal map texture
+        GPU_TCF_NORMAL_MAP = 0x100,
+        /// Fragment mask
+        GPU_TCF_FRAG_MASK = 0x200,
+        ///
+        GPU_TCF_USABLE_MAX   = 0x40000,
+        GPU_TCF_MAX_ENUM_BIT = 0x7FFFFFFF
+    } EGPUTextureCreationFlag;
+    typedef uint32_t GPUTextureCreationFlags;
+
+    typedef union GPUClearValue
+    {
+        struct
+        {
+            float r;
+            float g;
+            float b;
+            float a;
+        };
+        struct
+        {
+            float depth;
+            uint32_t stencil;
+        };
+    } GPUClearValue;
+
+    typedef struct GPUTextureDescriptor
+    {
+        /// Texture creation flags (decides memory allocation strategy, sharing access,...)
+        GPUTextureCreationFlags flags;
+        /// Optimized clear value (recommended to use this same value when clearing the rendertarget)
+        GPUClearValue clear_value;
+        /// Width
+        uint32_t width;
+        /// Height
+        uint32_t height;
+        /// Depth (Should be 1 if not a mType is not TEXTURE_TYPE_3D)
+        uint32_t depth;
+        /// Texture array size (Should be 1 if texture is not a texture array or cubemap)
+        uint32_t array_size;
+        ///  image format
+        EGPUFormat format;
+        /// Number of mip levels
+        uint32_t mip_levels;
+        /// Number of multisamples per pixel (currently Textures created with mUsage TEXTURE_USAGE_SAMPLED_IMAGE only support CGPU_SAMPLE_COUNT_1)
+        EGPUSampleCount sample_count;
+        /// The image quality level. The higher the quality, the lower the performance. The valid range is between zero and the value appropriate for mSampleCount
+        uint32_t sample_quality;
+        /// Owner queue of the resource at creation
+        GPUQueueID owner_queue;
+        /// What state will the texture get created in
+        EGPUResourceState start_state;
+        /// Descriptor creation
+        GPUResourceTypes descriptors;
+        /// Memory Aliasing
+        uint32_t is_dedicated;
+        uint32_t is_aliasing;
+    } GPUTextureDescriptor;
+
 	typedef struct GPUTexture
 	{
         GPUDeviceID pDevice;
@@ -637,7 +856,7 @@ extern "C" {
         uint32_t ownsImage : 1;
         /// In CGPU concept aliasing resource owns no memory
         uint32_t isAliasing : 1;
-        uint32_t canClias : 1;
+        uint32_t canAlias : 1;
         uint32_t isImported : 1;
         uint32_t canExport : 1;
         void* nativeHandle;
@@ -662,6 +881,22 @@ extern "C" {
         GPUTextureViewDescriptor desc;
     } GPUTextureView;
 
+    typedef struct GPUTextureSubresource
+    {
+        GPUTextureViewAspects aspects;
+        uint32_t mip_level;
+        uint32_t base_array_layer;
+        uint32_t layer_count;
+    } GPUTextureSubresource;
+
+    typedef struct GPUBufferToTextureTransfer
+    {
+        GPUTextureID dst;
+        GPUTextureSubresource dst_subresource;
+        GPUBufferID src;
+        uint64_t src_offset;
+    } GPUBufferToTextureTransfer;
+
     typedef struct GPUShaderLibraryDescriptor
     {
         const char8_t* pName;
@@ -672,52 +907,6 @@ extern "C" {
     } GPUShaderLibraryDescriptor;
 
     // Shaders
-    typedef enum EGPUResourceType
-    {
-        GPU_RESOURCE_TYPE_NONE    = 0,
-        GPU_RESOURCE_TYPE_SAMPLER = 0x00000001,
-        // SRV Read only texture
-        GPU_RESOURCE_TYPE_TEXTURE = (GPU_RESOURCE_TYPE_SAMPLER << 1),
-        /// RTV Texture
-        GPU_RESOURCE_TYPE_RENDER_TARGET = (GPU_RESOURCE_TYPE_TEXTURE << 1),
-        /// DSV Texture
-        GPU_RESOURCE_TYPE_DEPTH_STENCIL = (GPU_RESOURCE_TYPE_RENDER_TARGET << 1),
-        /// UAV Texture
-        GPU_RESOURCE_TYPE_RW_TEXTURE = (GPU_RESOURCE_TYPE_DEPTH_STENCIL << 1),
-        // SRV Read only buffer
-        GPU_RESOURCE_TYPE_BUFFER     = (GPU_RESOURCE_TYPE_RW_TEXTURE << 1),
-        GPU_RESOURCE_TYPE_BUFFER_RAW = (GPU_RESOURCE_TYPE_BUFFER | (GPU_RESOURCE_TYPE_BUFFER << 1)),
-        /// UAV Buffer
-        GPU_RESOURCE_TYPE_RW_BUFFER     = (GPU_RESOURCE_TYPE_BUFFER << 2),
-        GPU_RESOURCE_TYPE_RW_BUFFER_RAW = (GPU_RESOURCE_TYPE_RW_BUFFER | (GPU_RESOURCE_TYPE_RW_BUFFER << 1)),
-        /// CBV Uniform buffer
-        GPU_RESOURCE_TYPE_UNIFORM_BUFFER = (GPU_RESOURCE_TYPE_RW_BUFFER << 2),
-        /// Push constant / Root constant
-        GPU_RESOURCE_TYPE_PUSH_CONSTANT = (GPU_RESOURCE_TYPE_UNIFORM_BUFFER << 1),
-        /// IA
-        GPU_RESOURCE_TYPE_VERTEX_BUFFER   = (GPU_RESOURCE_TYPE_PUSH_CONSTANT << 1),
-        GPU_RESOURCE_TYPE_INDEX_BUFFER    = (GPU_RESOURCE_TYPE_VERTEX_BUFFER << 1),
-        GPU_RESOURCE_TYPE_INDIRECT_BUFFER = (GPU_RESOURCE_TYPE_INDEX_BUFFER << 1),
-        /// Cubemap SRV
-        GPU_RESOURCE_TYPE_TEXTURE_CUBE = (GPU_RESOURCE_TYPE_TEXTURE | (GPU_RESOURCE_TYPE_INDIRECT_BUFFER << 1)),
-        /// RTV / DSV per mip slice
-        GPU_RESOURCE_TYPE_RENDER_TARGET_MIP_SLICES = (GPU_RESOURCE_TYPE_INDIRECT_BUFFER << 2),
-        /// RTV / DSV per array slice
-        GPU_RESOURCE_TYPE_RENDER_TARGET_ARRAY_SLICES = (GPU_RESOURCE_TYPE_RENDER_TARGET_MIP_SLICES << 1),
-        /// RTV / DSV per depth slice
-        GPU_RESOURCE_TYPE_RENDER_TARGET_DEPTH_SLICES = (GPU_RESOURCE_TYPE_RENDER_TARGET_ARRAY_SLICES << 1),
-        GPU_RESOURCE_TYPE_RAY_TRACING                = (GPU_RESOURCE_TYPE_RENDER_TARGET_DEPTH_SLICES << 1),
-#if defined(GPU_USE_VULKAN)
-        /// Subpass input (descriptor type only available in Vulkan)
-        GPU_RESOURCE_TYPE_INPUT_ATTACHMENT       = (GPU_RESOURCE_TYPE_RAY_TRACING << 1),
-        GPU_RESOURCE_TYPE_TEXEL_BUFFER           = (GPU_RESOURCE_TYPE_INPUT_ATTACHMENT << 1),
-        GPU_RESOURCE_TYPE_RW_TEXEL_BUFFER        = (GPU_RESOURCE_TYPE_TEXEL_BUFFER << 1),
-        GPU_RESOURCE_TYPE_COMBINED_IMAGE_SAMPLER = (GPU_RESOURCE_TYPE_RW_TEXEL_BUFFER << 1),
-#endif
-        GPU_RESOURCE_TYPE_MAX_ENUM_BIT = 0x7FFFFFFF
-    } EGPUResourceType;
-    typedef uint32_t GPUResourceTypes;
-
     typedef struct GPUShaderResource
     {
         const char8_t* name;
@@ -796,6 +985,19 @@ extern "C" {
         GPURootSignaturePoolID pool;
 
     } GPURootSignatureDescriptor;
+
+    typedef struct GPUSamplerDescriptor
+    {
+        EGPUFilterType min_filter;
+        EGPUFilterType mag_filter;
+        EGPUMipMapMode mipmap_mode;
+        EGPUAddressMode address_u;
+        EGPUAddressMode address_v;
+        EGPUAddressMode address_w;
+        float mip_lod_bias;
+        float max_anisotropy;
+        EGPUCompareMode compare_func;
+    } GPUSamplerDescriptor;
 
     typedef struct GPUSampler
     {
@@ -940,22 +1142,6 @@ extern "C" {
         GPUDeviceID device;
     } GPUSemaphore;
 
-    typedef union GPUClearValue
-    {
-        struct
-        {
-            float r;
-            float g;
-            float b;
-            float a;
-        };
-        struct
-        {
-            float depth;
-            uint32_t stencil;
-        };
-    } GPUClearValue;
-
     typedef struct GPUColorAttachment {
         GPUTextureViewID view;
         GPUTextureViewID resolve_view;
@@ -985,32 +1171,6 @@ extern "C" {
         const GPUDepthStencilAttachment* depth_stencil;
         uint32_t render_target_count;
     } GPURenderPassDescriptor;
-
-    typedef enum EGPUResourceState
-    {
-        GPU_RESOURCE_STATE_UNDEFINED = 0,
-        GPU_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER = 0x1,
-        GPU_RESOURCE_STATE_INDEX_BUFFER = 0x2,
-        GPU_RESOURCE_STATE_RENDER_TARGET = 0x4,
-        GPU_RESOURCE_STATE_UNORDERED_ACCESS = 0x8,
-        GPU_RESOURCE_STATE_DEPTH_WRITE = 0x10,
-        GPU_RESOURCE_STATE_DEPTH_READ = 0x20,
-        GPU_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE = 0x40,
-        GPU_RESOURCE_STATE_PIXEL_SHADER_RESOURCE = 0x80,
-        GPU_RESOURCE_STATE_SHADER_RESOURCE = 0x40 | 0x80,
-        GPU_RESOURCE_STATE_STREAM_OUT = 0x100,
-        GPU_RESOURCE_STATE_INDIRECT_ARGUMENT = 0x200,
-        GPU_RESOURCE_STATE_COPY_DEST = 0x400,
-        GPU_RESOURCE_STATE_COPY_SOURCE = 0x800,
-        GPU_RESOURCE_STATE_GENERIC_READ = (((((0x1 | 0x2) | 0x40) | 0x80) | 0x200) | 0x800),
-        GPU_RESOURCE_STATE_PRESENT = 0x1000,
-        GPU_RESOURCE_STATE_COMMON = 0x2000,
-        GPU_RESOURCE_STATE_ACCELERATION_STRUCTURE = 0x4000,
-        GPU_RESOURCE_STATE_SHADING_RATE_SOURCE = 0x8000,
-        GPU_RESOURCE_STATE_RESOLVE_DEST = 0x10000,
-        GPU_RESOURCE_STATE_MAX_ENUM_BIT = 0x7FFFFFFF
-    } EGPUResourceState;
-    typedef uint32_t GPUResourceStates;
 
     typedef struct GPUTextureBarrier {
         GPUTextureID texture;
@@ -1113,11 +1273,68 @@ extern "C" {
         uint64_t size;
     } GPUBufferToBufferTransfer;
 
+    typedef struct GPUDescriptorSetDescriptor
+    {
+        GPURootSignatureID root_signature;
+        uint32_t set_index;
+    } GPUDescriptorSetDescriptor;
+
     typedef struct GPUDescriptorSet
     {
         GPURootSignatureID root_signature;
         uint32_t index;
     } GPUDescriptorSet;
+
+    typedef struct GPUDescriptorData
+    {
+        // Update Via Shader Reflection.
+        const char8_t* name;
+        // Update Via Binding Slot.
+        uint32_t binding;
+        EGPUResourceType binding_type;
+        union
+        {
+            struct
+            {
+                /// Offset to bind the buffer descriptor
+                const uint64_t* offsets;
+                const uint64_t* sizes;
+            } buffers_params;
+            // Descriptor set buffer extraction options
+            // TODO: Support descriptor buffer extraction
+            // struct
+            //{
+            //    struct CGPUShaderEntryDescriptor* shader;
+            //    uint32_t buffer_index;
+            //    ECGPUShaderStage shader_stage;
+            //} extraction_params;
+            struct
+            {
+                uint32_t uav_mip_slice;
+                bool blend_mip_chain;
+            } uav_params;
+            bool enable_stencil_resource;
+        };
+        union
+        {
+            const void** ptrs;
+            /// Array of texture descriptors (srv and uav textures)
+            GPUTextureViewID* textures;
+            /// Array of sampler descriptors
+            GPUSamplerID* samplers;
+            /// Array of buffer descriptors (srv, uav and cbv buffers)
+            GPUBufferID* buffers;
+            /// Array of pipeline descriptors
+            GPURenderPipelineID* render_pipelines;
+            /// Array of pipeline descriptors
+            //GPUComputePipelineID* compute_pipelines;
+            /// DescriptorSet buffer extraction
+            GPUDescriptorSetID* descriptor_sets;
+            /// Custom binding (raytracing acceleration structure ...)
+            // CGPUAccelerationStructureId* acceleration_structures;
+        };
+        uint32_t count;
+    } GPUDescriptorData;
 
 #ifdef __cplusplus
 }

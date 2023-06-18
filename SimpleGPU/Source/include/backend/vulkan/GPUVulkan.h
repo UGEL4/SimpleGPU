@@ -17,6 +17,8 @@ extern "C" {
     #define VK_USE_VOLK_DEVICE_TABLE
 #endif
 
+    #define MAX_PLANE_COUNT 3
+
 	const GPUProcTable* GPUVulkanProcTable();
 	const GPUSurfacesProcTable* GPUVulkanSurfacesTable();
 
@@ -48,6 +50,8 @@ extern "C" {
     //texture & texture_view api
     GPUTextureViewID GPUCreateTextureView_Vulkan(GPUDeviceID pDevice, const GPUTextureViewDescriptor* pDesc);
     void GPUFreeTextureView_Vulkan(GPUTextureViewID pTextureView);
+    GPUTextureID GPUCreateTexture_Vulkan(GPUDeviceID device, const GPUTextureDescriptor* desc);
+    void GPUFreeTexture_Vulkan(GPUTextureID texture);
 
     //shader
     GPUShaderLibraryID GPUCreateShaderLibrary_Vulkan(GPUDeviceID pDevice, const GPUShaderLibraryDescriptor* pDesc);
@@ -73,6 +77,7 @@ extern "C" {
     void GPUCmdBegin_Vulkan(GPUCommandBufferID cmdBuffer);
     void GPUCmdEnd_Vulkan(GPUCommandBufferID cmdBuffer);
     void GPUCmdResourceBarrier_Vulkan(GPUCommandBufferID cmd, const GPUResourceBarrierDescriptor* desc);
+    void GPUCmdTransferBufferToTexture_Vulkan(GPUCommandBufferID cmd, const struct GPUBufferToTextureTransfer* desc);
 
     //fence & semaphore
     GPUFenceID GPUCreateFence_Vulkan(GPUDeviceID device);
@@ -101,6 +106,14 @@ extern "C" {
     void GPUMapBuffer_Vulkan(GPUBufferID buffer, const struct GPUBufferRange* range);
     void GPUUnmapBuffer_Vulkan(GPUBufferID buffer);
     void GPUTransferBufferToBuffer_Vulkan(GPUCommandBufferID cmd, const struct GPUBufferToBufferTransfer* desc);
+
+    // sampler
+    GPUSamplerID GPUCreateSampler_Vulkan(GPUDeviceID device, const struct GPUSamplerDescriptor* desc);
+    void GPUFreeSampler_Vulkan(GPUSamplerID sampler);
+
+    GPUDescriptorSetID GPUCreateDescriptorSet_Vulkan(GPUDeviceID device, const struct GPUDescriptorSetDescriptor* desc);
+    void GPUFreeDescriptorSet_Vulkan(GPUDescriptorSetID set);
+    void GPUUpdateDescriptorSet_Vulkan(GPUDescriptorSetID set, const GPUDescriptorData* datas, uint32_t count);
 
     typedef struct VkUtil_DescriptorPool
     {
@@ -185,12 +198,14 @@ extern "C" {
         VkSwapchainKHR pVkSwapchain;
     } GPUSwapchain_Vulkan;
 
+    typedef struct VmaAllocation_T* VmaAllocation;
     typedef struct GPUTexture_Vulkan
     {
         GPUTexture super;
         VkImage pVkImage;
         union
         {
+            VmaAllocation pVkAllocation;
             VkDeviceMemory pVkDeviceMemory;
         };
     } GPUTexture_Vulkan;
@@ -263,7 +278,6 @@ extern "C" {
         uint32_t type;
     } GPUCommandBuffer_Vulkan;
 
-    typedef struct VmaAllocation_T* VmaAllocation;
     typedef struct GPUBuffer_Vulkan {
         GPUBuffer super;
         VkBuffer pVkBuffer;
@@ -296,6 +310,19 @@ extern "C" {
         uint32_t height;
         uint32_t layers;
     } VulkanFramebufferDesriptor;
+
+    typedef struct GPUSampler_Vulkan
+    {
+        GPUSampler super;
+        VkSampler pSampler;
+    } GPUSampler_Vulkan;
+
+    typedef struct GPUDescriptorSet_Vulkan
+    {
+        GPUDescriptorSet super;
+        VkDescriptorSet pSet;
+        union VkDescriptorUpdateData* pUpdateData;
+    } GPUDescriptorSet_Vulkan;
 
 #ifdef __cplusplus
 }
