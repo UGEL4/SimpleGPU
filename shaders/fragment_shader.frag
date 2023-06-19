@@ -16,6 +16,7 @@ layout(location = 0) in vec3 frColor;
 layout(location = 1) in vec2 outUv;
 void main()
 {
-	outClor = vec4(frColor, 1.0);
+	//outClor = vec4(frColor, 1.0);
 	//outClor = texture(tex, outUv);
+	outClor = texture(sampler2D(tex, texSamp), outUv);
 }

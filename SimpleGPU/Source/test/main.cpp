@@ -213,9 +213,9 @@ int main(int argc, char** argv)
     GPURootSignatureDescriptor rootRSDesc     = {};
     rootRSDesc.shaders                        = shaderEntries;
     rootRSDesc.shader_count                   = 2;
-    rootRSDesc.static_sampler_names           = &sampler_name;
+    /*rootRSDesc.static_sampler_names           = &sampler_name;
     rootRSDesc.static_sampler_count           = 1;
-    rootRSDesc.static_samplers                = &texture_sampler;
+    rootRSDesc.static_samplers                = &texture_sampler;*/
     GPURootSignatureID pRS                    = GPUCreateRootSignature(device, &rootRSDesc);
     GPUDescriptorSetDescriptor set_desc{};
     set_desc.root_signature = pRS;
@@ -390,7 +390,7 @@ int main(int argc, char** argv)
     desc_data[1].name              = u8"texSamp";
     desc_data[1].samplers      = &texture_sampler;
     desc_data[1].count             = 1;
-    GPUUpdateDescriptorSet(set, desc_data, 1);
+    GPUUpdateDescriptorSet(set, desc_data, 2);
     //GPUUpdateDescriptorSet(set_1, desc_data + 1, 1);
     bool exit = false;
     MSG msg{};
