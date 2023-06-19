@@ -102,6 +102,7 @@ const GPUProcTable vkTable = {
     .RenderEncoderDrawIndexed       = &GPURenderEncoderDrawIndexed_Vulkan,
     .RenderEncoderBindVertexBuffers = &GPURenderEncoderBindVertexBuffers_Vulkan,
     .RenderEncoderBindIndexBuffer   = &GPURenderEncoderBindIndexBuffer_Vulkan,
+    .RenderEncoderBindDescriptorSet = &GPURenderEncoderBindDescriptorSet_Vulkan,
     .CreateBuffer                   = &GPUCreateBuffer_Vulkan,
     .FreeBuffer                     = &GPUFreeBuffer_Vulkan,
     .TransferBufferToBuffer         = &GPUTransferBufferToBuffer_Vulkan,
@@ -1958,19 +1959,19 @@ GPURootSignatureID GPUCreateRootSignature_Vulkan(GPUDeviceID device, const struc
                 }
             }
             // static samplers
-            /*for (uint32_t i_ss = 0; i_ss < desc->static_sampler_count; i_ss++)
+            for (uint32_t i_ss = 0; i_ss < desc->static_sampler_count; i_ss++)
             {
                 if (RS->super.static_samplers[i_ss].set == set_index)
                 {
                     GPUSampler_Vulkan* immutableSampler     = (GPUSampler_Vulkan*)desc->static_samplers[i_ss];
-                    vkbindings[i_binding].pImmutableSamplers = &immutableSampler->pVkSampler;
+                    vkbindings[i_binding].pImmutableSamplers = &immutableSampler->pSampler;
                     vkbindings[i_binding].binding            = RS->super.static_samplers[i_ss].binding;
-                    vkbindings[i_binding].stageFlags         = VkUtil_TranslateShaderUsages(RS->super.static_samplers[i_ss].stages);
-                    vkbindings[i_binding].descriptorType     = VkUtil_TranslateResourceType(RS->super.static_samplers[i_ss].type);
+                    vkbindings[i_binding].stageFlags         = VulkanUtil_TranslateShaderUsages(RS->super.static_samplers[i_ss].stages);
+                    vkbindings[i_binding].descriptorType     = VulkanUtil_TranslateResourceType(RS->super.static_samplers[i_ss].type);
                     vkbindings[i_binding].descriptorCount    = RS->super.static_samplers[i_ss].size;
                     i_binding++;
                 }
-            }*/
+            }
             VkDescriptorSetLayoutCreateInfo set_info = {
                 .sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
                 .pNext        = NULL,
@@ -2199,7 +2200,8 @@ void CGPUUtil_InitRSParamTables(GPURootSignature* RS, const struct GPURootSignat
                 bool coincided = false;
                 for (auto&& static_sampler : all_static_samplers)
                 {
-                    if (static_sampler.name_hash == resource.name_hash &&
+                    //if (static_sampler.name_hash == resource.name_hash &&
+                    if (strcmp((const char*)static_sampler.name, (const char*)resource.name) == 0 &&
                         static_sampler.set == resource.set &&
                         static_sampler.binding == resource.binding)
                     {
@@ -2896,6 +2898,37 @@ void GPURenderEncoderBindIndexBuffer_Vulkan(GPURenderPassEncoderID encoder, GPUB
         (sizeof(uint16_t) == indexStride) ? VK_INDEX_TYPE_UINT16 : 
         ((sizeof(uint8_t) == indexStride) ? VK_INDEX_TYPE_UINT8_EXT : VK_INDEX_TYPE_UINT32);
     D->mVkDeviceTable.vkCmdBindIndexBuffer(Cmd->pVkCmd, B->pVkBuffer, offset, indexType);
+}
+
+void GPURenderEncoderBindDescriptorSet_Vulkan(GPURenderPassEncoderID encoder, GPUDescriptorSetID set)
+{
+    GPUCommandBuffer_Vulkan* Cmd = (GPUCommandBuffer_Vulkan*)encoder;
+    const GPUDevice_Vulkan* D    = (GPUDevice_Vulkan*)Cmd->super.device;
+    GPUDescriptorSet_Vulkan* S   = (GPUDescriptorSet_Vulkan*)set;
+    GPURootSignature_Vulkan* RS  = (GPURootSignature_Vulkan*)S->super.root_signature;
+
+    // VK Must Fill All DescriptorSetLayouts at first dispach/draw.
+    // Example: If shader uses only set 2, we still have to bind empty sets for set=0 and set=1
+    if (Cmd->pLayout != RS->pPipelineLayout)
+    {
+        Cmd->pLayout = RS->pPipelineLayout;
+        for (uint32_t i = 0; i < RS->setLayoutsCount; i++)
+        {
+            if (RS->pSetLayouts[i].pEmptyDescSet != VK_NULL_HANDLE &&
+                S->super.index != i)
+            {
+                D->mVkDeviceTable.vkCmdBindDescriptorSets(Cmd->pVkCmd,
+                                                          VK_PIPELINE_BIND_POINT_GRAPHICS, RS->pPipelineLayout, i,
+                                                          1, &RS->pSetLayouts[i].pEmptyDescSet, 0, NULL);
+            }
+        }
+    }
+
+    D->mVkDeviceTable.vkCmdBindDescriptorSets(Cmd->pVkCmd,
+                                              VK_PIPELINE_BIND_POINT_GRAPHICS, RS->pPipelineLayout,
+                                              S->super.index, 1, &S->pSet,
+                                              // TODO: Dynamic Offset
+                                              0, NULL);
 }
 
 GPUBufferID GPUCreateBuffer_Vulkan(GPUDeviceID device, const GPUBufferDescriptor* desc)

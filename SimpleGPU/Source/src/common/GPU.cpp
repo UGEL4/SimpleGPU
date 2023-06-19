@@ -527,6 +527,15 @@ void GPURenderEncoderBindIndexBuffer(GPURenderPassEncoderID encoder, GPUBufferID
     encoder->device->pProcTableCache->RenderEncoderBindIndexBuffer(encoder, buffer, offset, indexStride);
 }
 
+void GPURenderEncoderBindDescriptorSet(GPURenderPassEncoderID encoder, GPUDescriptorSetID set)
+{
+    assert(encoder);
+    assert(encoder->device);
+    assert(set);
+    assert(encoder->device->pProcTableCache->RenderEncoderBindDescriptorSet);
+    encoder->device->pProcTableCache->RenderEncoderBindDescriptorSet(encoder, set);
+}
+
 GPUBufferID GPUCreateBuffer(GPUDeviceID device, const GPUBufferDescriptor* desc)
 {
     assert(device);

@@ -98,7 +98,7 @@ extern "C" {
     void GPURenderEncoderBindVertexBuffers_Vulkan(GPURenderPassEncoderID encoder, uint32_t buffer_count,
                                                   const GPUBufferID* buffers, const uint32_t* strides, const uint32_t* offsets);
     void GPURenderEncoderBindIndexBuffer_Vulkan(GPURenderPassEncoderID encoder, GPUBufferID buffer, uint32_t offset, uint64_t indexStride);
-    //void GPURenderEncoderBindDescriptorSetVulkan(GPURenderPassEncoderID encoder, GPUDescriptorSetID set);
+    void GPURenderEncoderBindDescriptorSet_Vulkan(GPURenderPassEncoderID encoder, GPUDescriptorSetID set);
 
     //buffer
     GPUBufferID GPUCreateBuffer_Vulkan(GPUDeviceID device, const GPUBufferDescriptor* desc);

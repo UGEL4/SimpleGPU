@@ -546,6 +546,8 @@ extern "C" {
                                                    const GPUBufferID* buffers, const uint32_t* strides, const uint32_t* offsets);
     void GPURenderEncoderBindIndexBuffer(GPURenderPassEncoderID encoder, GPUBufferID buffer, uint32_t offset, uint64_t indexStride);
     typedef void (*GPUProcRenderEncoderBindIndexBuffer)(GPURenderPassEncoderID encoder, GPUBufferID buffer, uint32_t offset, uint64_t indexStride);
+    void GPURenderEncoderBindDescriptorSet(GPURenderPassEncoderID encoder, GPUDescriptorSetID set);
+    typedef void (*GPUProcRenderEncoderBindDescriptorSet)(GPURenderPassEncoderID encoder, GPUDescriptorSetID set);
 
     //buffer
     GPUBufferID GPUCreateBuffer(GPUDeviceID device, const GPUBufferDescriptor* desc);
@@ -638,6 +640,7 @@ extern "C" {
         const GPUProcRenderEncoderDrawIndexed RenderEncoderDrawIndexed;
         const GPUProcRenderEncoderBindVertexBuffers RenderEncoderBindVertexBuffers;
         const GPUProcRenderEncoderBindIndexBuffer RenderEncoderBindIndexBuffer;
+        const GPUProcRenderEncoderBindDescriptorSet RenderEncoderBindDescriptorSet;
 
         //buffer
         const GPUProcCreateBuffer CreateBuffer;
