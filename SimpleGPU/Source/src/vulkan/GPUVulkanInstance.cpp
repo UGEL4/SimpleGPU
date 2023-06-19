@@ -3188,6 +3188,23 @@ void GPUUpdateDescriptorSet_Vulkan(GPUDescriptorSetID set, const GPUDescriptorDa
                 }
                 break;
             }
+            case GPU_RESOURCE_TYPE_COMBINED_IMAGE_SAMPLER:
+            {
+                assert(pParam->textures && "cgpu_assert: Binding NULL texture(s)");
+                GPUTextureView_Vulkan** TextureViews = (GPUTextureView_Vulkan**)pParam->textures;
+                GPUSampler_Vulkan** Samplers         = (GPUSampler_Vulkan**)pParam->samplers;
+                for (uint32_t arr = 0; arr < arrayCount; ++arr)
+                {
+                    // TODO: Stencil support
+                    assert(pParam->textures[arr] && "cgpu_assert: Binding NULL texture!");
+                    VkDescriptorUpdateData* Data = &pUpdateData[ResData->binding + arr];
+                    Data->mImageInfo.imageView   = ResData->type == GPU_RESOURCE_TYPE_RW_TEXTURE ? TextureViews[arr]->pVkUAVDescriptor : TextureViews[arr]->pVkSRVDescriptor;
+                    Data->mImageInfo.imageLayout = ResData->type == GPU_RESOURCE_TYPE_RW_TEXTURE ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                    Data->mImageInfo.sampler     = Samplers[arr]->pSampler;
+                    dirty                        = true;
+                }
+                break;
+            }
             case GPU_RESOURCE_TYPE_UNIFORM_BUFFER:
             case GPU_RESOURCE_TYPE_BUFFER:
             case GPU_RESOURCE_TYPE_BUFFER_RAW:

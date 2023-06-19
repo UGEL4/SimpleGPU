@@ -214,9 +214,10 @@ int main(int argc, char** argv)
     set_desc.set_index      = 0;
     GPUDescriptorSetID set  = GPUCreateDescriptorSet(device, &set_desc);
     GPUVertexLayout vertexLayout{};
-    vertexLayout.attributeCount = 2;
+    vertexLayout.attributeCount = 3;
     vertexLayout.attributes[0]  = { 1, GPU_FORMAT_R32G32B32_SFLOAT, 0, 0, sizeof(float) * 3, GPU_INPUT_RATE_VERTEX };
     vertexLayout.attributes[1]  = { 1, GPU_FORMAT_R32G32B32_SFLOAT, 0, sizeof(float) * 3, sizeof(float) * 3, GPU_INPUT_RATE_VERTEX };
+    vertexLayout.attributes[2]  = { 1, GPU_FORMAT_R32G32_SFLOAT, 0, sizeof(float) * 6, sizeof(float) * 2, GPU_INPUT_RATE_VERTEX };
     GPURenderPipelineDescriptor pipelineDesc{};
     pipelineDesc.pRootSignature    = pRS;
     pipelineDesc.pVertexShader     = &shaderEntries[0];
@@ -233,13 +234,14 @@ int main(int argc, char** argv)
     GPUTextureID texture         = CreateTexture(device, pGraphicQueue);
     GPUTextureViewID textureView = CreateTextureView(texture);
 
-    //update descriptorset
-    GPUDescriptorData desc_data{};
-    desc_data.name         = u8"Tex";
-    desc_data.binding      = 0;
-    desc_data.binding_type = GPU_RESOURCE_TYPE_TEXTURE;
-    desc_data.textures     = &textureView;
-    GPUUpdateDescriptorSet(set, &desc_data, 1);
+    ////update descriptorset
+    //GPUDescriptorData desc_data{};
+    //desc_data.name         = u8"tex";//shader sampler2D`s name
+    //desc_data.binding      = 0;
+    //desc_data.binding_type = GPU_RESOURCE_TYPE_TEXTURE;
+    //desc_data.textures     = &textureView;
+    //desc_data.samplers     = &texture_sampler;
+    ////GPUUpdateDescriptorSet(set, &desc_data, 1);
 
     //render loop begin
     GPUCommandPoolID pool = GPUCreateCommandPool(pGraphicQueue);
@@ -255,12 +257,14 @@ int main(int argc, char** argv)
         float r;
         float g;
         float b;
+        float u;
+        float v;
     };
     Vertex vertices[] = {
-        { 0.0f, -0.5f, 0.f, 1.f, 0.f, 0.f },
-        { -0.5f, 0.5f, 0.f, 0.f, 1.f, 0.f },
-        { 0.5f, 0.5f, 0.f, 1.f, 0.f, 1.f },
-        { 0.f, 1.f, 0.f, 0.f, 0.f, 1.f }
+        { 0.0f, -0.5f, 0.f, 1.f, 0.f, 0.f, 0.f, 0.f },
+        { -0.5f, 0.5f, 0.f, 0.f, 1.f, 0.f, 0.f, 1.f },
+        { 0.5f, 0.5f, 0.f, 1.f, 0.f, 1.f, 1.f, 0.f },
+        { 0.f, 1.f, 0.f, 0.f, 0.f, 1.f, 1.f, 1.f }
     };
     /*Vertex vertices[] = {
         { 1.f, 0.f, 0.f, 0.f, 0.f, 1.f },
@@ -298,6 +302,7 @@ int main(int argc, char** argv)
     GPUCmdEnd(cmd);
     GPUQueueSubmitDescriptor texture_cpy_submit = { .cmds = &cmd, .cmds_count = 1 };
     GPUSubmitQueue(pGraphicQueue, &texture_cpy_submit);
+    GPUWaitQueueIdle(pGraphicQueue);
 
     //vertex buffer
     GPUBufferDescriptor vertex_desc{};
@@ -369,7 +374,14 @@ int main(int argc, char** argv)
     GPUWaitQueueIdle(pGraphicQueue);
 
     GPUFreeBuffer(uploadBuffer);
-
+    // update descriptorset
+    GPUDescriptorData desc_data{};
+    desc_data.name         = u8"tex"; // shader sampler2D`s name
+    desc_data.binding      = 0;
+    desc_data.binding_type = GPU_RESOURCE_TYPE_TEXTURE;
+    desc_data.textures     = &textureView;
+    desc_data.samplers     = &texture_sampler;
+    GPUUpdateDescriptorSet(set, &desc_data, 1);
     bool exit = false;
     MSG msg{};
     while (!exit)

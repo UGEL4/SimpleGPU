@@ -300,7 +300,11 @@ extern "C" {
     };
 
     static const char* deviceWantedExtensions[] = {
-        VK_KHR_SWAPCHAIN_EXTENSION_NAME
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+        /************************************************************************/
+        // Descriptor Update Template Extension for efficient descriptor set updates
+        /************************************************************************/
+        VK_KHR_DESCRIPTOR_UPDATE_TEMPLATE_EXTENSION_NAME
 #if VK_KHR_device_group
         , VK_KHR_DEVICE_GROUP_EXTENSION_NAME
 #endif

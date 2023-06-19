@@ -207,8 +207,15 @@ GPUTextureID GPUCreateTexture(GPUDeviceID device, const GPUTextureDescriptor* de
 {
     assert(device);
     assert(device->pProcTableCache->CreateTexture);
-    GPUTexture* T = (GPUTexture*)device->pProcTableCache->CreateTexture(device, desc);
-    T->pDevice    = device;
+    GPUTextureDescriptor new_desc{};
+    memcpy(&new_desc, desc, sizeof(GPUTextureDescriptor));
+    if (desc->array_size == 0) new_desc.array_size = 1;
+    if (desc->mip_levels == 0) new_desc.mip_levels = 1;
+    if (desc->depth == 0) new_desc.depth = 1;
+    if (desc->sample_count == 0) new_desc.sample_count = (EGPUSampleCount)1;
+    GPUTexture* T  = (GPUTexture*)device->pProcTableCache->CreateTexture(device, &new_desc);
+    T->pDevice     = device;
+    T->sampleCount = desc->sample_count;
     return T;
 }
 
