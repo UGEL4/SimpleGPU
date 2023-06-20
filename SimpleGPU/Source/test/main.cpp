@@ -6,6 +6,8 @@
 #include <filesystem>
 #include "texture.h"
 
+static int WIDTH = 512;
+static int HEIGHT = 512;
 inline static void ReadBytes(const char8_t* file_name, uint32_t** bytes, uint32_t* length)
 {
     FILE* f = fopen((const char*)file_name, "rb");
@@ -67,7 +69,7 @@ HWND CreateWin32Window()
     {
         HWND window = CreateWindowEx(0, myclass, TEXT("title"),
                                      WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
-                                     CW_USEDEFAULT, CW_USEDEFAULT, 0, 0, GetModuleHandle(0), 0);
+                                     WIDTH, HEIGHT, 0, 0, GetModuleHandle(0), 0);
         if (window)
         {
             ShowWindow(window, SW_SHOWDEFAULT);
@@ -156,8 +158,8 @@ int main(int argc, char** argv)
     swapchainDesc.presentQueuesCount = 1;
     swapchainDesc.pSurface           = pSurface;
     swapchainDesc.format             = EGPUFormat::GPU_FORMAT_B8G8R8A8_UNORM;
-    swapchainDesc.width              = 1280;
-    swapchainDesc.height             = 720;
+    swapchainDesc.width              = WIDTH;
+    swapchainDesc.height             = HEIGHT;
     swapchainDesc.imageCount         = 3;
     swapchainDesc.enableVSync        = true;
     GPUSwapchainID pSwapchain        = GPUCreateSwapchain(device, &swapchainDesc);
@@ -267,10 +269,10 @@ int main(int argc, char** argv)
         float v;
     };
     Vertex vertices[] = {
-        { 0.0f, -0.5f, 0.f, 1.f, 0.f, 0.f, 0.f, 0.f },
-        { -0.5f, 0.5f, 0.f, 0.f, 1.f, 0.f, 0.f, 1.f },
-        { 0.5f, 0.5f, 0.f, 1.f, 0.f, 1.f, 1.f, 0.f },
-        { 0.f, 1.f, 0.f, 0.f, 0.f, 1.f, 1.f, 1.f }
+        { -0.5f, 0.5f, 0.f, 1.f, 0.f, 0.f, 0.f, 0.f },
+        { -0.5f, -0.5f, 0.f, 0.f, 1.f, 0.f, 0.f, 1.f },
+        { 0.5f, -0.5f, 0.f, 1.f, 0.f, 1.f, 1.f, 1.f },
+        { 0.5f, 0.5f, 0.f, 0.f, 0.f, 1.f, 1.f, 0.f }
     };
     /*Vertex vertices[] = {
         { 1.f, 0.f, 0.f, 0.f, 0.f, 1.f },
@@ -345,7 +347,7 @@ int main(int argc, char** argv)
 
     //index buffer
     uint16_t indices[] = {
-        0, 1, 2, 1, 3, 2
+        0, 1, 2, 0, 2, 3
     };
     GPUBufferDescriptor index_desc{};
     index_desc.size         = sizeof(indices);
@@ -438,8 +440,8 @@ int main(int argc, char** argv)
                 render_pass_desc.render_target_count = 1;
                 GPURenderPassEncoderID encoder       = GPUCmdBeginRenderPass(cmd, &render_pass_desc);
                 {
-                    GPURenderEncoderSetViewport(encoder, 0.f, 0.f, (float)backbuffer->width,
-                                                (float)backbuffer->height, 0.f, 1.f);
+                    GPURenderEncoderSetViewport(encoder, 0.f, (float)backbuffer->height, (float)backbuffer->width,
+                                                -(float)backbuffer->height, 0.f, 1.f);
                     GPURenderEncoderSetScissor(encoder, 0, 0, backbuffer->width,
                                                backbuffer->height);
                     GPURenderEncoderBindPipeline(encoder, pipeline);
@@ -450,7 +452,8 @@ int main(int argc, char** argv)
                     //bind descriptor ste
                     GPURenderEncoderBindDescriptorSet(encoder, set);
                     //GPURenderEncoderDraw(encoder, 3, 0);
-                    GPURenderEncoderDrawIndexed(encoder, sizeof(indices) / sizeof(uint16_t), 0, 0);
+                    //GPURenderEncoderDrawIndexed(encoder, sizeof(indices) / sizeof(uint16_t), 0, 0);
+                    GPURenderEncoderDrawIndexedInstanced(encoder, sizeof(indices) / sizeof(uint16_t), 1, 0, 0, 0);
                 }
                 GPUCmdEndRenderPass(cmd, encoder);
 

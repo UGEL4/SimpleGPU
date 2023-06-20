@@ -305,6 +305,7 @@ extern "C" {
         // Descriptor Update Template Extension for efficient descriptor set updates
         /************************************************************************/
         VK_KHR_DESCRIPTOR_UPDATE_TEMPLATE_EXTENSION_NAME
+        //VK_KHR_MAINTENANCE1_EXTENSION_NAME // Vulkan NDC fixed, vk 1.0
 #if VK_KHR_device_group
         , VK_KHR_DEVICE_GROUP_EXTENSION_NAME
 #endif

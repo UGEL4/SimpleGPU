@@ -540,6 +540,8 @@ extern "C" {
     typedef void (*GPUProcRenderEncoderDraw)(GPURenderPassEncoderID encoder, uint32_t vertex_count, uint32_t first_vertex);
     void GPURenderEncoderDrawIndexed(GPURenderPassEncoderID encoder, uint32_t indexCount, uint32_t firstIndex, uint32_t vertexOffset);
     typedef void (*GPUProcRenderEncoderDrawIndexed)(GPURenderPassEncoderID encoder, uint32_t indexCount, uint32_t firstIndex, uint32_t vertexOffset);
+    void GPURenderEncoderDrawIndexedInstanced(GPURenderPassEncoderID encoder, uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t vertexOffset, uint32_t firstInstance);
+    typedef void (*GPUProcRenderEncoderDrawIndexedInstanced)(GPURenderPassEncoderID encoder, uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t vertexOffset, uint32_t firstInstance);
     void GPURenderEncoderBindVertexBuffers(GPURenderPassEncoderID encoder, uint32_t buffer_count,
                                                   const GPUBufferID* buffers, const uint32_t* strides, const uint32_t* offsets);
     typedef void (*GPUProcRenderEncoderBindVertexBuffers)(GPURenderPassEncoderID encoder, uint32_t buffer_count,
@@ -638,6 +640,7 @@ extern "C" {
         const GPUProcRenderEncoderBindPipeline RenderEncoderBindPipeline;
         const GPUProcRenderEncoderDraw RenderEncoderDraw;
         const GPUProcRenderEncoderDrawIndexed RenderEncoderDrawIndexed;
+        const GPUProcRenderEncoderDrawIndexedInstanced RenderEncoderDrawIndexedInstanced;
         const GPUProcRenderEncoderBindVertexBuffers RenderEncoderBindVertexBuffers;
         const GPUProcRenderEncoderBindIndexBuffer RenderEncoderBindIndexBuffer;
         const GPUProcRenderEncoderBindDescriptorSet RenderEncoderBindDescriptorSet;

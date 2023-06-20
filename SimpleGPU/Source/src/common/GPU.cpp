@@ -508,6 +508,14 @@ void GPURenderEncoderDrawIndexed(GPURenderPassEncoderID encoder, uint32_t indexC
     D->pProcTableCache->RenderEncoderDrawIndexed(encoder, indexCount, firstIndex, vertexOffset);
 }
 
+void GPURenderEncoderDrawIndexedInstanced(GPURenderPassEncoderID encoder, uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t vertexOffset, uint32_t firstInstance)
+{
+    GPUDeviceID D = encoder->device;
+    assert(D);
+    assert(D->pProcTableCache->RenderEncoderDrawIndexedInstanced);
+    D->pProcTableCache->RenderEncoderDrawIndexedInstanced(encoder, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
+}
+
 void GPURenderEncoderBindVertexBuffers(GPURenderPassEncoderID encoder, uint32_t buffer_count,
                                        const GPUBufferID* buffers, const uint32_t* strides, const uint32_t* offsets)
 {
