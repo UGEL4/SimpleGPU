@@ -2,14 +2,16 @@
 #include "gpuconfig.h"
 #include <stdint.h>
 
+#if defined(__cplusplus)
 #if defined(_MSC_VER) && !defined(__clang__)
     #define DECLEAR_ZERO_VAL(type, var, num)              \
         type* var = (type*)_alloca(sizeof(type) * (num)); \
         memset((void*)var, 0, sizeof(type) * (num));
 #else
     #define DECLEAR_ZERO_VAL(type, var, num) \
-        type* var[(num)];                    \
+        type var[(num)];                    \
         memset((void*)var, 0, sizeof(type) * (num));
+#endif
 #endif
 
 #define GPU_SAFE_FREE(ptr) \

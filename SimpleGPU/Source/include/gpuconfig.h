@@ -1,5 +1,5 @@
 #pragma once
-#define GPU_USE_VULKAN
+//#define GPU_USE_VULKAN
 
 #ifndef gpu_max
     #define gpu_max(a, b) (((a) > (b)) ? (a) : (b))

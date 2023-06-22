@@ -5,7 +5,7 @@
 #include <vector>
 #include <algorithm>
 #include <unordered_map>
-#include "GPUVulkanEXTs.h"
+#include "extensions/GPUVulkanEXTs.h"
 #include "backend/vulkan/GPUVulkanUtils.h"
 #include "backend/vulkan/vma/vk_mem_alloc.h"
 
@@ -649,6 +649,11 @@ void GPUSubmitQueue_Vulkan(GPUQueueID queue, const struct GPUQueueSubmitDescript
     GPUFence_Vulkan* F  = (GPUFence_Vulkan*)desc->signal_fence;
     uint32_t cmdCount   = desc->cmds_count;
     GPUCommandBuffer_Vulkan** vkCmds = (GPUCommandBuffer_Vulkan**)desc->cmds;
+    // cgpu_assert that given cmd list and given params are valid
+    assert(cmdCount > 0);
+    assert(vkCmds);
+    // execute given command list
+    assert(Q->pQueue != VK_NULL_HANDLE);
     DECLEAR_ZERO_VAL(VkCommandBuffer, cmds, cmdCount);
     for (uint32_t i = 0; i < cmdCount; i++)
     {
@@ -2135,14 +2140,14 @@ inline static char8_t* duplicate_string(const char8_t* src_string)
 }
 
 #include <set>
-// ÕâÊÇÒ»¸ö·Ç³£¸´ÔÓµÄ¹ý³Ì£¬Ç£³¶µ½´óÁ¿µÄmoveºÍjoin²Ù×÷¡£¾ßÌåµÄÂß¼­ÈçÏÂ£º
-// 1.ÊÕ¼¯ËùÓÐShaderStageÖÐ³öÏÖµÄËùÓÐShaderResource£¬²»¹ÜËûÃÇÊÇ·ñÖØ¸´
-//   Õâ¸ö½×¶ÎÒ²»áÊÕ¼¯ËùÓÐµÄRootConst£¬²¢ÇÒ¶ÔËüÃÇ½øÐÐºÏ²¢£¨²»Í¬½×¶Î³öÏÖµÄÏàÍ¬RootConstµÄStageºÏ²¢£©
-//   Ò²»áÊÕ¼¯ËùÓÐµÄStaticSamplers
-// 2.ºÏ²¢ShaderResourcesµ½RootSignatureTable£¨ÏÂ³ÆÎªRST£©ÖÐ
-//   ÓµÓÐÏàÍ¬set¡¢bindingÒÔ¼°typeµÄ¡¢³öÏÖÔÚ²»Í¬ShaderStageÖÐµÄShaderResource»á±»ºÏ²¢Stage
-// 3.ÇÐ·ÖÐÐ
-//   °´ÕÕSet°ÑºÏ²¢ºÃµÄResource·Ö¸î²¢·Å½øroosting::tablesÖÐ
+// ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½Ç³ï¿½ï¿½ï¿½ï¿½ÓµÄ¹ï¿½ï¿½Ì£ï¿½Ç£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½moveï¿½ï¿½joinï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ß¼ï¿½ï¿½ï¿½ï¿½Â£ï¿½
+// 1.ï¿½Õ¼ï¿½ï¿½ï¿½ï¿½ï¿½ShaderStageï¿½Ð³ï¿½ï¿½Öµï¿½ï¿½ï¿½ï¿½ï¿½ShaderResourceï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç·ï¿½ï¿½Ø¸ï¿½
+//   ï¿½ï¿½ï¿½ï¿½×¶ï¿½Ò²ï¿½ï¿½ï¿½Õ¼ï¿½ï¿½ï¿½ï¿½Ðµï¿½RootConstï¿½ï¿½ï¿½ï¿½ï¿½Ò¶ï¿½ï¿½ï¿½ï¿½Ç½ï¿½ï¿½ÐºÏ²ï¿½ï¿½ï¿½ï¿½ï¿½Í¬ï¿½×¶Î³ï¿½ï¿½Öµï¿½ï¿½ï¿½Í¬RootConstï¿½ï¿½Stageï¿½Ï²ï¿½ï¿½ï¿½
+//   Ò²ï¿½ï¿½ï¿½Õ¼ï¿½ï¿½ï¿½ï¿½Ðµï¿½StaticSamplers
+// 2.ï¿½Ï²ï¿½ShaderResourcesï¿½ï¿½RootSignatureTableï¿½ï¿½ï¿½Â³ï¿½ÎªRSTï¿½ï¿½ï¿½ï¿½
+//   Óµï¿½ï¿½ï¿½ï¿½Í¬setï¿½ï¿½bindingï¿½Ô¼ï¿½typeï¿½Ä¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ú²ï¿½Í¬ShaderStageï¿½Ðµï¿½ShaderResourceï¿½á±»ï¿½Ï²ï¿½Stage
+// 3.ï¿½Ð·ï¿½ï¿½ï¿½
+//   ï¿½ï¿½ï¿½ï¿½Setï¿½ÑºÏ²ï¿½ï¿½Ãµï¿½Resourceï¿½Ö¸î²¢ï¿½Å½ï¿½roosting::tablesï¿½ï¿½
 void CGPUUtil_InitRSParamTables(GPURootSignature* RS, const struct GPURootSignatureDescriptor* desc)
 {
     GPUShaderReflection* entry_reflections[32] = { 0 };
@@ -2624,8 +2629,8 @@ void GPUCmdTransferBufferToTexture_Vulkan(GPUCommandBufferID cmd, const struct G
 
         VkBufferImageCopy copy = {};
         copy.bufferOffset                    = desc->src_offset;
-        copy.bufferRowLength                 = xBlocksCount * 1;// Ö¸¶¨ÏñËØÔÚÄÚ´æÖÐµÄ²¼¾Ö·½Ê½, Ö¸¶¨0±íÊ¾ÏñËØ½ôÃÜ´ò°ü
-        copy.bufferImageHeight               = yBlocksCount * 1;// Ö¸¶¨ÏñËØÔÚÄÚ´æÖÐµÄ²¼¾Ö·½Ê½, Ö¸¶¨0±íÊ¾ÏñËØ½ôÃÜ´ò°ü
+        copy.bufferRowLength                 = xBlocksCount * 1;// Ö¸ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ú´ï¿½ï¿½ÐµÄ²ï¿½ï¿½Ö·ï¿½Ê½, Ö¸ï¿½ï¿½0ï¿½ï¿½Ê¾ï¿½ï¿½ï¿½Ø½ï¿½ï¿½Ü´ï¿½ï¿½
+        copy.bufferImageHeight               = yBlocksCount * 1;// Ö¸ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ú´ï¿½ï¿½ÐµÄ²ï¿½ï¿½Ö·ï¿½Ê½, Ö¸ï¿½ï¿½0ï¿½ï¿½Ê¾ï¿½ï¿½ï¿½Ø½ï¿½ï¿½Ü´ï¿½ï¿½
         copy.imageSubresource.aspectMask     = (VkImageAspectFlags)desc->dst->aspectMask;
         copy.imageSubresource.mipLevel       = desc->dst_subresource.mip_level;
         copy.imageSubresource.baseArrayLayer = desc->dst_subresource.base_array_layer;

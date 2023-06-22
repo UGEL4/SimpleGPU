@@ -56,7 +56,7 @@ LRESULT CALLBACK WindowProcedure(HWND window, UINT msg, WPARAM wp, LPARAM lp)
 HWND CreateWin32Window()
 {
     // Register the window class.
-    auto myclass        = L"myclass";
+    auto myclass        = "myclass";
     WNDCLASSEX wndclass = {
         sizeof(WNDCLASSEX), CS_DBLCLKS,
         WindowProcedure,
