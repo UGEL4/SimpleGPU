@@ -4,6 +4,10 @@
     #include "backend/vulkan/GPUVulkan.h"
 #endif
 
+#ifdef GPU_USE_D3D12
+    #include "backend/d3d12/GPUD3D12.h"
+#endif
+
 #include <assert.h>
 #include <cstring>
 #include <memory>
@@ -23,6 +27,12 @@ GPUInstanceID GPUCreateInstance(const GPUInstanceDescriptor* pDesc)
     {
         pProcTable     = GPUVulkanProcTable();
         pSurfacesTable = GPUVulkanSurfacesTable();
+    }
+#endif
+#ifdef GPU_USE_D3D12
+    else if (pDesc->backend == GPUBackend_D3D12)
+    {
+        pProcTable = GPUD3D12ProcTable();
     }
 #endif
 

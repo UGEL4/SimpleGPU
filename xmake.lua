@@ -68,6 +68,7 @@ target(gpu_target_name)
         add_syslinks("advapi32", "user32", "shell32", "Ole32", {public = true})
     end
     add_cxflags(project_cxflags, {public = true, force = true})
-    add_defines("GPU_USE_VULKAN=1")
+    add_defines("GPU_USE_VULKAN")
+    add_defines("GPU_USE_D3D12")
     add_includedirs(include_dir_list)
     add_files(source_file_list, "$(projectdir)/"..project_name.."/Source/test/*.cpp")

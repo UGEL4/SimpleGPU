@@ -58,6 +58,7 @@ extern "C" {
 	typedef enum EGPUBackend
 	{
 		GPUBackend_Vulkan = 0,
+        GPUBackend_D3D12  = 1,
 		GPUBackend_Count,
 		GPUBackend_MAX_ENUM_BIT = 0x7FFFFFFF
 	} EGPUBackend;

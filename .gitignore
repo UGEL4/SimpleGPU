@@ -7,3 +7,6 @@
 *.vcxproj.filters
 *.vcxproj.user
 /bin
+.vscode
+.xmake
+build
