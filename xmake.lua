@@ -61,7 +61,8 @@ set_languages("c++20")
 add_rules("mode.debug", "mode.release")
 
 include_dir_list = {"$(projectdir)/"..project_name.."/Source/include", "$(projectdir)/"..project_name.."/SDK/vulkan"}
-source_file_list = {"$(projectdir)/"..project_name.."/Source/src/build.**.cpp", "$(projectdir)/"..project_name.."/Source/src/shader-reflections/spirv/spirv_reflect.c"}
+source_file_list = {"$(projectdir)/"..project_name.."/Source/src/build.**.cpp", "$(projectdir)/"..project_name.."/Source/src/shader-reflections/spirv/spirv_reflect.c",
+"$(projectdir)/"..project_name.."/Source/include/render_graph/src/**.cpp"}
 target(gpu_target_name)
     set_kind("binary")
     if (is_os("windows")) then 

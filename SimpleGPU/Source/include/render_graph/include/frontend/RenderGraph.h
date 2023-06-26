@@ -5,7 +5,7 @@ class RenderGraph
 {
 public:
     using RenderGraphSetupFunc = std::function<void(void)>;
-    static RenderGraph* Create(RenderGraphSetupFunc& setup);
+    static RenderGraph* Create(const RenderGraphSetupFunc& setup);
     static void Destroy(RenderGraph* graph);
 
     void Compile();

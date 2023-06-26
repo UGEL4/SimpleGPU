@@ -2,7 +2,7 @@
 #include "render_graph/include/backend/RenderGraphBackend.h"
 #include <iostream>
 
-RenderGraph* RenderGraph::Create(RenderGraphSetupFunc &setup)
+RenderGraph* RenderGraph::Create(const RenderGraphSetupFunc& setup)
 {
     RenderGraph* graph = nullptr;
 
@@ -11,6 +11,11 @@ RenderGraph* RenderGraph::Create(RenderGraphSetupFunc &setup)
     graph = new RenderGraphBackend();
 
     return graph;
+}
+
+RenderGraph::RenderGraph()
+{
+
 }
 
 void RenderGraph::Destroy(RenderGraph* graph)
