@@ -72,3 +72,6 @@ target(gpu_target_name)
     add_defines("GPU_USE_D3D12")
     add_includedirs(include_dir_list)
     add_files(source_file_list, "$(projectdir)/"..project_name.."/Source/test/*.cpp")
+target_end()
+
+includes(project_name.."/Source/test/render_graph")
