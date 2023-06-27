@@ -9,6 +9,7 @@ RenderGraph* RenderGraph::Create(const RenderGraphSetupFunc& setup)
     setup();
 
     graph = new RenderGraphBackend();
+    graph->Initialize();
 
     return graph;
 }
@@ -22,6 +23,7 @@ void RenderGraph::Destroy(RenderGraph* graph)
 {
     if (graph)
     {
+        graph->Finalize();
         delete graph;
     }
 }
@@ -34,4 +36,14 @@ void RenderGraph::Compile()
 void RenderGraph::Execute()
 {
     std::cout << "RenderGraph::Execute" << std::endl;
+}
+
+void RenderGraph::Initialize()
+{
+    m_pGraph = DependencyGraph::Create();
+}
+
+void RenderGraph::Finalize()
+{
+    DependencyGraph::Destroy(m_pGraph);
 }

@@ -9,4 +9,6 @@ public:
     ~RenderGraphBackend() = default;
 
     virtual void Execute() override;
+    virtual void Initialize() override;
+    virtual void Finalize() override;
 };
