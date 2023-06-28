@@ -32,10 +32,13 @@ protected:
 class DependencyGraph
 {
 public:
+    using Node = DependencyGraphNode;
+    using Edge = DependencyGraphEdge;
     static DependencyGraph* Create();
     static void Destroy(DependencyGraph* graph);
     virtual ~DependencyGraph() = default;
 
     virtual dep_graph_handle_t Insert(DependencyGraphNode* pNode) = 0;
     virtual bool Link(DependencyGraphNode* pFrom, DependencyGraphNode* pTo, DependencyGraphEdge* pEdge) = 0;
+    virtual Node* AccessNode(dep_graph_handle_t handle) = 0;
 };

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "boost/graph/adjacency_list.hpp"
+#include "DependencyGraph.hpp"
 
 namespace BoostGraph
 {
@@ -45,3 +46,12 @@ namespace BoostGraph
         return prop[vert];
     }
 }
+
+class DependencyGraphBase : public BoostGraph::Graph<DependencyGraph::Node*, DependencyGraph::Edge*>
+{
+public:
+    using DAGVertex = BoostGraph::GraphVertex<DependencyGraph::Node*, DependencyGraph::Edge*>;
+    using DAGEdge   = BoostGraph::GraphEdge<DependencyGraph::Node*, DependencyGraph::Edge*>;
+
+    static DependencyGraphBase* As(DependencyGraph* graph);
+};

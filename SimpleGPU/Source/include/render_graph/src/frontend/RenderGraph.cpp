@@ -1,5 +1,6 @@
 #include "render_graph/include/frontend/RenderGraph.h"
 #include "render_graph/include/backend/RenderGraphBackend.h"
+#include "render_graph/include/frontend/PassNode.hpp"
 #include <iostream>
 
 RenderGraph* RenderGraph::Create(const RenderGraphSetupFunc& setup)
@@ -12,20 +13,6 @@ RenderGraph* RenderGraph::Create(const RenderGraphSetupFunc& setup)
     graph->Initialize();
 
     return graph;
-}
-
-RenderGraph::RenderGraph()
-{
-
-}
-
-void RenderGraph::Destroy(RenderGraph* graph)
-{
-    if (graph)
-    {
-        graph->Finalize();
-        delete graph;
-    }
 }
 
 void RenderGraph::Compile()
@@ -46,4 +33,27 @@ void RenderGraph::Initialize()
 void RenderGraph::Finalize()
 {
     DependencyGraph::Destroy(m_pGraph);
+}
+
+PassHandle RenderGraph::AddRenderPass(const RenderPassSetupFunc& setup)
+{
+    PassNode* newPass = new RenderPassNode();
+    mPasses.emplace_back(newPass);
+    m_pGraph->Insert(newPass);
+    setup(*this);
+    return newPass->GetHandle();
+}
+
+RenderGraph::RenderGraph()
+{
+
+}
+
+void RenderGraph::Destroy(RenderGraph* graph)
+{
+    if (graph)
+    {
+        graph->Finalize();
+        delete graph;
+    }
 }
