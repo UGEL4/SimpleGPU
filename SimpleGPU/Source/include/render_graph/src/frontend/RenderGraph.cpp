@@ -90,6 +90,42 @@ PassHandle RenderGraph::AddRenderPass(const RenderPassSetupFunc& setup)
 }
 ///////////RenderPassBuilder//////////////////
 
+///////////TextureBuilder//////////////////
+RenderGraph::TextureBuilder::TextureBuilder(RenderGraph& graph, TextureNode& textureNode)
+: mGraph(graph), mTextureNode(textureNode)
+{
+    mTextureNode.mDesc.sample_count = GPU_SAMPLE_COUNT_1;
+    mTextureNode.mDesc.descriptors  = GPU_RESOURCE_TYPE_TEXTURE;
+    mTextureNode.mDesc.is_dedicated = false;
+}
+
+RenderGraph::TextureBuilder& RenderGraph::TextureBuilder::Import(GPUTextureID texture, EGPUResourceState initedState)
+{
+    mTextureNode.m_pFrameTexture    = texture;
+    mTextureNode.mInitState         = initedState;
+    if (texture)
+    {mTextureNode.mDesc.width        = texture->width;
+    mTextureNode.mDesc.height       = texture->height;
+    mTextureNode.mDesc.depth        = texture->depth;
+    mTextureNode.mDesc.array_size   = texture->arraySizeMinusOne + 1;
+    mTextureNode.mDesc.format       = (EGPUFormat)texture->format;
+    mTextureNode.mDesc.sample_count = texture->sampleCount;}
+    mTextureNode.mInported          = texture;
+    return *this;
+}
+
+TextureHandle RenderGraph::CreateTexture(const TextureSetupFunc& setup)
+{
+    auto newTex = new TextureNode();
+    mResources.emplace_back(newTex);
+    m_pGraph->Insert(newTex);
+
+    TextureBuilder builder(*this, *newTex);
+    setup(*this, builder);
+    return newTex->GetHandle();
+}
+///////////TextureBuilder//////////////////
+
 RenderGraph::RenderGraph()
 {
 

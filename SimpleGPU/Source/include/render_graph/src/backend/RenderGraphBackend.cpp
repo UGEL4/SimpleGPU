@@ -1,6 +1,7 @@
 #include "render_graph/include/backend/RenderGraphBackend.h"
 #include "render_graph/include/frontend/PassNode.hpp"
 #include "render_graph/include/frontend/ResourceEdge.hpp"
+#include "render_graph/include/frontend/ResourceNode.hpp"
 #include <iostream>
 
 RenderGraphBackend::RenderGraphBackend(const RenderGraphBuilder& builder)
@@ -28,6 +29,16 @@ void RenderGraphBackend::Execute()
             }
         }
         mPasses.clear();
+
+        //resources
+        for (auto res : mResources)
+        {
+            if (res)
+            {
+                delete res;
+            }
+        }
+        mResources.clear();
     }
 }
 

@@ -36,6 +36,7 @@ public:
         friend class RenderGraph;
     protected:
         RenderPassBuilder(RenderGraph& graph, RenderPassNode& node);
+    public:
         RenderPassBuilder& Write(TextureRTVHandle handle);
     private:
         RenderGraph& mGraph;
@@ -43,6 +44,21 @@ public:
     };
     using RenderPassSetupFunc = std::function<void(RenderGraph&, RenderPassBuilder&)>;
     PassHandle AddRenderPass(const RenderPassSetupFunc& setup);
+
+    class TextureBuilder
+    {
+    public:
+        friend class RenderGraph;
+    protected:
+        TextureBuilder(RenderGraph& graph, TextureNode& textureNode);
+    public:
+        TextureBuilder& Import(GPUTextureID texture, EGPUResourceState initedState);
+    private:
+        RenderGraph& mGraph;
+        TextureNode& mTextureNode;
+    };
+    using TextureSetupFunc = std::function<void(RenderGraph&, TextureBuilder&)>;
+    TextureHandle CreateTexture(const TextureSetupFunc& setup);
 
     RenderGraph();
     virtual ~RenderGraph() = default;
@@ -54,4 +70,5 @@ protected:
 };
 
 using RenderGraphBuilder = RenderGraph::RenderGraphBuilder;
-using RenderPassBuilder = RenderGraph::RenderPassBuilder;
+using RenderPassBuilder  = RenderGraph::RenderPassBuilder;
+using TextureBuilder     = RenderGraph::TextureBuilder;

@@ -9,14 +9,26 @@ struct vertex_prop_map_key_t {
 
 int main()
 {
-    /* RenderGraph* graph = RenderGraph::Create([=](){
+    GPUTextureID texture = nullptr;
+    RenderGraph* graph = RenderGraph::Create([=](RenderGraphBuilder& builder){
         std::cout << "create rendergraph setup" << std::endl;
     });
+    
+    auto tex_handle = graph->CreateTexture([=](RenderGraph& g, TextureBuilder& builder)
+    {
+        builder.Import(texture, GPU_RESOURCE_STATE_UNDEFINED);
+    });
+
+    graph->AddRenderPass([=](RenderGraph& g, RenderPassBuilder& builder)
+    {
+        builder.Write(tex_handle);
+    });
+
     graph->Compile();
     graph->Execute();
-    RenderGraph::Destroy(graph); */
+    RenderGraph::Destroy(graph);
 
-    using vertexProp = boost::property<vertex_prop_map_key_t, std::string>;
+    /*using vertexProp = boost::property<vertex_prop_map_key_t, std::string>;
     struct edgeProp {
         std::string name;
     };
@@ -100,7 +112,7 @@ int main()
         std::cout << BoostGraph::GetVertexProperty<vertex_prop_map_key_t>(*iter, g) << ", ";
         /* PropertyMap prop = get(vertex_prop_map_key_t(), g);
         std::cout << prop[*iter] << ", "; */
-    }
-    std::cout << std::endl;
+    //}
+    //std::cout << std::endl;
     return 0;
 }
