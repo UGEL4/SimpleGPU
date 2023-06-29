@@ -20,6 +20,9 @@ class DependencyGraphEdge
 public:
     friend class DependencyGraphImp;
     DependencyGraphEdge() = default;
+
+    DependencyGraphNode* From();
+    DependencyGraphNode* To();
 protected:
     DependencyGraph*   m_pGraph;
     dep_graph_handle_t mFromNode;
@@ -41,4 +44,16 @@ public:
     virtual dep_graph_handle_t Insert(DependencyGraphNode* pNode) = 0;
     virtual bool Link(DependencyGraphNode* pFrom, DependencyGraphNode* pTo, DependencyGraphEdge* pEdge) = 0;
     virtual Node* AccessNode(dep_graph_handle_t handle) = 0;
+    virtual Node* NodeAt(dep_graph_handle_t id) = 0;
+    virtual bool Clear() = 0;
 };
+
+inline DependencyGraphNode* DependencyGraphEdge::From()
+{
+    return m_pGraph->NodeAt(mFromNode);
+}
+
+inline DependencyGraphNode* DependencyGraphEdge::To()
+{
+    return m_pGraph->NodeAt(mToNode);
+}

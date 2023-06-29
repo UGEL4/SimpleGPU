@@ -9,6 +9,8 @@ public:
     virtual dep_graph_handle_t Insert(DependencyGraphNode* pNode) override;
     virtual bool Link(DependencyGraphNode* pFrom, DependencyGraphNode* pTo, DependencyGraphEdge* pEdge) override;
     virtual Node* AccessNode(dep_graph_handle_t handle) override;
+    virtual Node* NodeAt(dep_graph_handle_t id) final;
+    virtual bool Clear() final;
 
 protected:
     vertex_descriptor GetDescriptor(Node* node)
@@ -41,6 +43,17 @@ bool DependencyGraphImp::Link(DependencyGraphNode* pFrom, DependencyGraphNode* p
 DependencyGraph::Node* DependencyGraphImp::AccessNode(dep_graph_handle_t handle)
 {
     return (*this)[DAGVertex(handle)];
+}
+
+DependencyGraph::Node* DependencyGraphImp::NodeAt(dep_graph_handle_t id)
+{
+    return (*this)[DAGVertex(id)];
+}
+
+bool DependencyGraphImp::Clear()
+{
+    BoostGraph::Graph<DependencyGraph::Node*, DependencyGraph::Edge*>::clear();
+    return true;
 }
 
 DependencyGraph* DependencyGraph::Create()
