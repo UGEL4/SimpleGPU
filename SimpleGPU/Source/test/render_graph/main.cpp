@@ -28,6 +28,18 @@ int main()
     graph->Execute();
     RenderGraph::Destroy(graph);
 
+
+    /* DependencyGraph* g = DependencyGraph::Create();
+    DependencyGraphNode* res_node = new DependencyGraphNode();
+    auto res_handle = g->Insert(res_node);
+    DependencyGraphNode* pass_node = new DependencyGraphNode();
+    auto pass_handle = g->Insert(pass_node);
+    DependencyGraphEdge* e = new DependencyGraphEdge();
+    bool result = g->Link(pass_node, res_node, e);
+    delete e;
+    delete pass_node;
+    delete res_node;
+    delete g; */
     /*using vertexProp = boost::property<vertex_prop_map_key_t, std::string>;
     struct edgeProp {
         std::string name;

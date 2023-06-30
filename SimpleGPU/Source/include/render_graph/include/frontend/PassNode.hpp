@@ -3,6 +3,7 @@
 #include "render_graph/include/DependencyGraph.hpp"
 #include <vector>
 #include <functional>
+#include <iostream>
 
 class TextureEdge;
 class PassNode : public RenderGraphNode
@@ -13,6 +14,7 @@ public:
 
     PassHandle const GetHandle() const;
     void ForEachTextures(const std::function<void(TextureNode*, TextureEdge*)>&);
+    ~PassNode() {std::cout << "Free PassNode : " << mId << std::endl;}
 protected:
     PassNode(EPassType type);
 

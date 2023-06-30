@@ -15,7 +15,7 @@ public:
 protected:
     vertex_descriptor GetDescriptor(Node* node)
     {
-        return (vertex_descriptor)node->m_pGraph;
+        return (vertex_descriptor)node->mId;
     }
 };
 

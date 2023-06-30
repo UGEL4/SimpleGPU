@@ -2,6 +2,7 @@
 #include "render_graph/include/frontend/BaseTypes.hpp"
 #include "render_graph/include/DependencyGraph.hpp"
 #include "api.h"
+#include <iostream>
 
 class PassNode;
 class TextureNode;
@@ -21,6 +22,7 @@ class TextureWriteEdge : public TextureEdge
 {
 public:
     TextureWriteEdge(TextureRTVHandle handle, EGPUResourceState requestedState = EGPUResourceState::GPU_RESOURCE_STATE_RENDER_TARGET);
+    ~TextureWriteEdge() { std::cout << "Free TextureWriteEdge: from = " << mFromNode << ", to = " << mToNode << std::endl;}
 
     virtual PassNode* GetPassNode() final;
     virtual TextureNode* GetTextureNode() final;
