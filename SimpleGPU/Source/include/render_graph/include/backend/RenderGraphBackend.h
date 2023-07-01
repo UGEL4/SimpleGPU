@@ -5,9 +5,11 @@
 
 #define RG_MAX_FRAME_IN_FILGHT 3
 
+class RenderPassNode;
 class RenderGraphFrameExecutor
 {
 public:
+    friend class RenderGraphBackend;
     RenderGraphFrameExecutor() = default;
 
     void Initialize(GPUDeviceID gfxDevice, GPUQueueID gfxQueue);
@@ -28,8 +30,14 @@ public:
     virtual void Initialize() override;
     virtual void Finalize() override;
 
+    void ExecuteRenderPass(RenderPassNode* pass, RenderGraphFrameExecutor& executor);
+
+private:
+    void CalculateResourceBarriers(RenderGraphFrameExecutor& executor, PassNode* pass,
+        std::vector<GPUTextureBarrier>& tex_barriers, std::vector<std::pair<TextureHandle, GPUTextureID>>& resolved_textures);
+
 private:
     GPUDeviceID m_pDevice;
     GPUQueueID m_pQueue;
-    RenderGraphFrameExecutor mExecuters[RG_MAX_FRAME_IN_FILGHT];
+    RenderGraphFrameExecutor mExecutors[RG_MAX_FRAME_IN_FILGHT];
 };

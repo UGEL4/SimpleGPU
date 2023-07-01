@@ -8,6 +8,8 @@ class PassNode;
 class TextureNode;
 class TextureEdge : public RenderGraphEdge
 {
+    friend class RenderGraph;
+    friend class RenderGraphBackend;
 public:
     TextureEdge(ERelationshipType type, EGPUResourceState requestedState);
     virtual ~TextureEdge() = default;

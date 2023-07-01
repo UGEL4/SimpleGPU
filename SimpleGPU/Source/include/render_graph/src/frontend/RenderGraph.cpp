@@ -62,6 +62,44 @@ void RenderGraph::Finalize()
     DependencyGraph::Destroy(m_pGraph);
 }
 
+EGPUResourceState RenderGraph::GetLastestState(const TextureNode* texture, const PassNode* pending_pass)
+{
+    if (mPasses[0] == pending_pass) return texture->mInitState;
+
+    PassNode* pass_iter = nullptr;
+    EGPUResourceState result = texture->mInitState;
+
+    //each write pass
+    ForeachWriterPass(texture->GetHandle(),
+    [&](TextureNode* tex, PassNode* pass, RenderGraphEdge* edge)
+    {
+        if (edge->type == ERelationshipType::TextureWrite)
+        {
+            auto writeEdge = static_cast<TextureWriteEdge*>(edge);
+            if (pass->After(pass_iter) && pass->Before(pending_pass))
+            {
+                pass_iter = pass;
+                result    = writeEdge->mRequestedState;
+            }
+        }
+    });
+
+    //each read pass
+
+    return result;
+}
+
+void RenderGraph::ForeachWriterPass(const TextureHandle handle, const std::function<void(TextureNode* texture, PassNode* pass, RenderGraphEdge* edge)>& func)
+{
+    m_pGraph->ForeachIncomingEdges(handle, [&](DependencyGraphNode* from, DependencyGraphNode* to, DependencyGraphEdge* e) 
+    {
+        PassNode* node            = static_cast<PassNode*>(from);
+        TextureNode* tex          = static_cast<TextureNode*>(to);
+        RenderGraphEdge* tex_edge = static_cast<RenderGraphEdge*>(e);
+        func(tex, node, tex_edge);
+    });
+}
+
 ///////////RenderPassBuilder//////////////////
 RenderGraph::RenderPassBuilder::RenderPassBuilder(RenderGraph& graph, RenderPassNode& node)
 : mGraph(graph), mPassNode(node)
@@ -78,11 +116,13 @@ RenderGraph::RenderPassBuilder& RenderGraph::RenderPassBuilder::Write(TextureRTV
     return *this;
 }
 
-PassHandle RenderGraph::AddRenderPass(const RenderPassSetupFunc& setup)
+PassHandle RenderGraph::AddRenderPass(const RenderPassSetupFunc& setup, const RenderPassExecuteFunction& execute)
 {
-    RenderPassNode* newPass = new RenderPassNode();
+    uint32_t order = (uint32_t)mPasses.size();
+    RenderPassNode* newPass = new RenderPassNode(order);
     mPasses.emplace_back(newPass);
     m_pGraph->Insert(newPass);
+    newPass->mExecuteFunc = execute;
 
     RenderPassBuilder builder(*this, *newPass);
     setup(*this, builder);

@@ -8,6 +8,7 @@
 class PassNode;
 class RenderPassNode;
 class ResourceNode;
+class TextureEdge;
 class RenderGraph
 {
 public:
@@ -30,6 +31,9 @@ public:
     virtual void Initialize();
     virtual void Finalize();
 
+    EGPUResourceState GetLastestState(const TextureNode* texture, const PassNode* pending_pass);
+    void ForeachWriterPass(const TextureHandle handle, const std::function<void(TextureNode* texture, PassNode* pass, RenderGraphEdge* edge)>&);
+
     class RenderPassBuilder
     {
     public:
@@ -43,7 +47,7 @@ public:
         RenderPassNode& mPassNode;
     };
     using RenderPassSetupFunc = std::function<void(RenderGraph&, RenderPassBuilder&)>;
-    PassHandle AddRenderPass(const RenderPassSetupFunc& setup);
+    PassHandle AddRenderPass(const RenderPassSetupFunc& setup, const RenderPassExecuteFunction& execute);
 
     class TextureBuilder
     {
@@ -67,6 +71,7 @@ protected:
     DependencyGraph* m_pGraph = nullptr;
     std::vector<PassNode*> mPasses;
     std::vector<ResourceNode*> mResources;
+    uint32_t mFrameIndex = 0;
 };
 
 using RenderGraphBuilder = RenderGraph::RenderGraphBuilder;

@@ -46,6 +46,8 @@ public:
     virtual Node* AccessNode(dep_graph_handle_t handle) = 0;
     virtual Node* NodeAt(dep_graph_handle_t id) = 0;
     virtual bool Clear() = 0;
+    virtual uint32_t ForeachIncomingEdges(Node* node, const std::function<void(Node* from, Node* to, Edge* edge)>&) = 0;
+    virtual uint32_t ForeachIncomingEdges(dep_graph_handle_t handle, const std::function<void(Node* from, Node* to, Edge* edge)>&) = 0;
 };
 
 inline DependencyGraphNode* DependencyGraphEdge::From()

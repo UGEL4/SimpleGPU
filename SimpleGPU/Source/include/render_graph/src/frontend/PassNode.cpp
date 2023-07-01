@@ -14,14 +14,26 @@ void PassNode::ForEachTextures(const std::function<void(TextureNode*, TextureEdg
     }
 }
 
-PassNode::PassNode(EPassType type)
-: RenderGraphNode(EObjectType::Pass)
+const bool PassNode::Before(const PassNode* other) const
+{
+    if (other == nullptr) return false;
+    return (mOrder < other->mOrder);
+}
+const bool PassNode::After(const PassNode* other) const
+{
+    if (other == nullptr) return true;
+    return (mOrder > other->mOrder);
+}
+
+PassNode::PassNode(EPassType type, uint32_t order)
+: RenderGraphNode(EObjectType::Pass), mOrder(order)
 {
 
 }
 
-RenderPassNode::RenderPassNode()
-: PassNode(EPassType::Render)
+/////////////////////////////////////RenderPassNode
+RenderPassNode::RenderPassNode(uint32_t order)
+: PassNode(EPassType::Render, order)
 {
 
 }

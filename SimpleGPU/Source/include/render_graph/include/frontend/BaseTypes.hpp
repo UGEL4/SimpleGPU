@@ -1,7 +1,9 @@
 #pragma once
 
 #include "render_graph/include/DependencyGraph.hpp"
+#include "api.h"
 #include <string>
+#include <functional>
 
 typedef uint64_t handle_t;
 enum class EObjectType : uint8_t
@@ -94,3 +96,21 @@ struct RenderGraphEdge : public DependencyGraphEdge
     const ERelationshipType type;
     const uint32_t pooled_size = 0;
 };
+
+class PassNode;
+class RenderGraphBackend;
+class RenderGraph;
+struct PassContext
+{
+    friend class RenderGraphBackend;
+    PassNode* m_pPassNode;
+    RenderGraphBackend* m_pGraph;
+    GPUCommandBufferID m_pCmd;
+};
+
+struct RenderPassContext : public PassContext
+{
+    GPURenderPassEncoderID m_pEncoder;
+};
+
+using RenderPassExecuteFunction = std::function<void(RenderGraph&, RenderPassContext&)>;

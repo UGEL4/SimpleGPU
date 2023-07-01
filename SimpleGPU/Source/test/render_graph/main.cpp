@@ -22,6 +22,10 @@ int main()
     graph->AddRenderPass([=](RenderGraph& g, RenderPassBuilder& builder)
     {
         builder.Write(tex_handle);
+    },
+    [=](RenderGraph& g, RenderPassContext& context)
+    {
+        
     });
 
     graph->Compile();

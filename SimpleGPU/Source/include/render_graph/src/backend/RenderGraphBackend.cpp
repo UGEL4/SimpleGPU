@@ -3,6 +3,7 @@
 #include "render_graph/include/frontend/ResourceEdge.hpp"
 #include "render_graph/include/frontend/ResourceNode.hpp"
 #include <iostream>
+#include <stdint.h>
 
 //////////////////RenderGraphFrameExecutor////////////////////////
 void RenderGraphFrameExecutor::Initialize(GPUDeviceID gfxDevice, GPUQueueID gfxQueue)
@@ -36,6 +37,22 @@ void RenderGraphBackend::Execute()
 {
     std::cout << "RenderGraphBackend::Execute" << std::endl;
 
+    uint32_t frameIndex = mFrameIndex % RG_MAX_FRAME_IN_FILGHT;
+    auto& executor = mExecutors[frameIndex];
+    GPUWaitFences(&executor.m_pFence, 1);
+
+    GPUCmdBegin(executor.m_pCmd);
+    {
+        for (auto& pass : mPasses)
+        {
+            if (pass->type == EObjectType::Pass)
+            {
+                ExecuteRenderPass(static_cast<RenderPassNode*>(pass), executor);
+            }
+        }
+    }
+    GPUCmdEnd(executor.m_pCmd);
+
     //clear
     {
         //pass
@@ -61,6 +78,8 @@ void RenderGraphBackend::Execute()
             }
         }
         mResources.clear();
+
+        m_pGraph->Clear();
     }
 }
 
@@ -69,7 +88,7 @@ void RenderGraphBackend::Initialize()
     RenderGraph::Initialize();
     for (uint32_t i = 0; i < RG_MAX_FRAME_IN_FILGHT; i++)
     {
-        mExecuters[i].Initialize(m_pDevice, m_pQueue);
+        mExecutors[i].Initialize(m_pDevice, m_pQueue);
     }
 }
 
@@ -78,7 +97,37 @@ void RenderGraphBackend::Finalize()
     RenderGraph::Finalize();
     for (uint32_t i = 0; i < RG_MAX_FRAME_IN_FILGHT; i++)
     {
-        mExecuters[i].Finalize();
+        mExecutors[i].Finalize();
     }
+}
+
+void RenderGraphBackend::ExecuteRenderPass(RenderPassNode* pass,  RenderGraphFrameExecutor& executor)
+{
+    //// resource de-virtualize
+    //alloca & update descriptorset
+    //call gpu aip
+    //deallace resource
+}
+
+void RenderGraphBackend::CalculateResourceBarriers(RenderGraphFrameExecutor& executor, PassNode* pass,
+        std::vector<GPUTextureBarrier>& tex_barriers, std::vector<std::pair<TextureHandle, GPUTextureID>>& resolved_textures)
+{
+    tex_barriers.resize(pass->GetTextureCount());
+    resolved_textures.resize(pass->GetTextureCount());
+    //遍历pass的每一个texture资源
+    pass->ForEachTextures([&](TextureNode* tex, TextureEdge* edge)
+    {
+        //分配texture资源
+
+        if (curr_state == edge->mRequestedState) return;
+        //分配barrier
+        GPUTextureBarrier barrier{};
+        barrier.texture = texture;
+        barrier.src_state = curr_state;
+        barrier.dst_state = edge->mRequestedState;
+        tex_barriers.emplace_back(barrier);
+    });
+
+    //遍历pass的每一个buffer资源
 }
 //////////////////RenderGraphBackend////////////////////////

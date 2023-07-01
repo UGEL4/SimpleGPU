@@ -6,8 +6,8 @@
 #include <filesystem>
 #include "texture.h"
 
-static int WIDTH = 512;
-static int HEIGHT = 512;
+static int WIDTH = 1080;
+static int HEIGHT = 1080;
 static uint32_t FLIGHT_FRAMES = 3;
 
 inline static void ReadBytes(const char8_t* file_name, uint32_t** bytes, uint32_t* length)
@@ -234,9 +234,9 @@ int main(int argc, char** argv)
     GPURootSignatureDescriptor rootRSDesc     = {};
     rootRSDesc.shaders                        = shaderEntries;
     rootRSDesc.shader_count                   = 2;
-    /*rootRSDesc.static_sampler_names           = &sampler_name;
+    rootRSDesc.static_sampler_names           = &sampler_name;
     rootRSDesc.static_sampler_count           = 1;
-    rootRSDesc.static_samplers                = &texture_sampler;*/
+    rootRSDesc.static_samplers                = &texture_sampler;
     GPURootSignatureID pRS                    = GPUCreateRootSignature(device, &rootRSDesc);
 
     //create descriptorset
@@ -420,7 +420,7 @@ int main(int argc, char** argv)
     desc_data[1].name              = u8"texSamp";
     desc_data[1].samplers      = &texture_sampler;
     desc_data[1].count             = 1;
-    GPUUpdateDescriptorSet(set, desc_data, 2);
+    GPUUpdateDescriptorSet(set, desc_data, 1);
     //GPUUpdateDescriptorSet(set_1, desc_data + 1, 1);
 
     //render loop begin
