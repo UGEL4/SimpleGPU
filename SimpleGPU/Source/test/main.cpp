@@ -58,18 +58,18 @@ LRESULT CALLBACK WindowProcedure(HWND window, UINT msg, WPARAM wp, LPARAM lp)
 HWND CreateWin32Window()
 {
     // Register the window class.
-    auto myclass        = "myclass";
+    auto myclass        = L"myclass";
     WNDCLASSEX wndclass = {
         sizeof(WNDCLASSEX), CS_DBLCLKS,
         WindowProcedure,
         0, 0, GetModuleHandle(0), LoadIcon(0, IDI_APPLICATION),
         LoadCursor(0, IDC_ARROW), HBRUSH(COLOR_WINDOW + 1),
-        0, (LPCWSTR)myclass, LoadIcon(0, IDI_APPLICATION)
+        0, myclass, LoadIcon(0, IDI_APPLICATION)
     };
     static bool bRegistered = RegisterClassEx(&wndclass);
     if (bRegistered)
     {
-        HWND window = CreateWindowEx(0, (LPCWSTR)myclass, TEXT("title"),
+        HWND window = CreateWindowEx(0, myclass, TEXT("title"),
                                      WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
                                      WIDTH, HEIGHT, 0, 0, GetModuleHandle(0), 0);
         if (window)
