@@ -2,6 +2,7 @@
 #include "Utils.h"
 #include "api.h"
 #include <assert.h>
+#include <utility>
 
 namespace RG
 {
@@ -43,7 +44,8 @@ namespace RG
 
         GPUTextureViewID view = GPUCreateTextureView(m_pDevice, &desc);
         AllocationMark mark = { frameIndex, 0 };
-        mTextureViews[key] = PooledTextureView(view, mark);
+        //mTextureViews[key] = PooledTextureView(view, mark);
+        mTextureViews.insert(std::make_pair(key, PooledTextureView(view, mark)));
         return view;
     }
 }

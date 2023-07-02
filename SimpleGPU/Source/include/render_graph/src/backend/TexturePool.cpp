@@ -44,7 +44,7 @@ namespace RG
         if (pool.empty())
         {
             auto tex = GPUCreateTexture(m_pDevice, &desc);
-            pool.emplace_back(tex);
+            pool.emplace_back(tex, desc.start_state, mark);
         }
         pool.front().mMark = mark;
         std::pair<GPUTextureID, EGPUResourceState> allocated = { pool.front().m_pTexture, pool.front().mState };
