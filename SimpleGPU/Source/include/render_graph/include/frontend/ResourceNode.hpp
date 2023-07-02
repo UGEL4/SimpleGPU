@@ -10,14 +10,16 @@ public:
     ResourceNode(EObjectType type);
     virtual ~ResourceNode() = default;
 
+    const bool InImported() const { return mImported; }
 protected:
-    bool mInported = false;
+    bool mImported = false;
 };
 
 class TextureNode : public ResourceNode
 {
 public:
     friend class RenderGraph;
+    friend class RenderGraphBackend;
     TextureNode();
     TextureHandle GetHandle() const;
     ~TextureNode() {std::cout << "free TextureNode :" << mId << std::endl;}

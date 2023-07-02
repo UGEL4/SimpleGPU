@@ -5,6 +5,7 @@
 #include <assert.h>
 #include "shader-reflections/spirv/spirv_reflect.h"
 #include "api.h"
+#include "Utils.h"
 
 void VulkanUtil_SelectValidationLayers(GPUInstance_Vulkan* pInstance, const char** instanceLayers, uint32_t layersCount)
 {
@@ -500,9 +501,8 @@ void VulkanUtil_InitializeShaderReflection(GPUDeviceID device, GPUShaderLibrary_
                     current_res->stages                          = S->pReflect->shader_stage;
                     current_res->type                            = RTLut[current_binding->descriptor_type];
                     current_res->name                            = (char8_t*)current_binding->name;
-                   /* current_res->name_hash =
-                    cgpu_name_hash(current_binding->name, strlen(current_binding->name));*/
-                    current_res->size = current_binding->count;
+                    current_res->name_hash                       = GPUNameHash(current_binding->name);
+                    current_res->size                            = current_binding->count;
                     // Solve Dimension
                     if ((current_binding->type_description->type_flags & SPV_REFLECT_TYPE_FLAG_EXTERNAL_IMAGE) ||
                         (current_binding->type_description->type_flags & SPV_REFLECT_TYPE_FLAG_EXTERNAL_SAMPLED_IMAGE))
@@ -527,11 +527,10 @@ void VulkanUtil_InitializeShaderReflection(GPUDeviceID device, GPUShaderLibrary_
                 current_res->type               = GPU_RESOURCE_TYPE_PUSH_CONSTANT;
                 current_res->binding            = 0;
                 current_res->name               = push_constants_name;
-                /*current_res->name_hash =
-                cgpu_name_hash(current_res->name, strlen(current_res->name));*/
-                current_res->stages = S->pReflect->shader_stage;
-                current_res->size   = root_sets[i]->size;
-                current_res->offset = root_sets[i]->offset;
+                current_res->name_hash          = GPUNameHash((const char*)current_res->name);
+                current_res->stages             = S->pReflect->shader_stage;
+                current_res->size               = root_sets[i]->size;
+                current_res->offset             = root_sets[i]->offset;
             }
         }
     }

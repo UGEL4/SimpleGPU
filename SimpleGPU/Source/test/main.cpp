@@ -8,7 +8,7 @@
 
 static int WIDTH = 1080;
 static int HEIGHT = 1080;
-static uint32_t FLIGHT_FRAMES = 3;
+#define FLIGHT_FRAMES 3
 
 inline static void ReadBytes(const char8_t* file_name, uint32_t** bytes, uint32_t* length)
 {
@@ -64,12 +64,12 @@ HWND CreateWin32Window()
         WindowProcedure,
         0, 0, GetModuleHandle(0), LoadIcon(0, IDI_APPLICATION),
         LoadCursor(0, IDC_ARROW), HBRUSH(COLOR_WINDOW + 1),
-        0, myclass, LoadIcon(0, IDI_APPLICATION)
+        0, (LPCWSTR)myclass, LoadIcon(0, IDI_APPLICATION)
     };
     static bool bRegistered = RegisterClassEx(&wndclass);
     if (bRegistered)
     {
-        HWND window = CreateWindowEx(0, myclass, TEXT("title"),
+        HWND window = CreateWindowEx(0, (LPCWSTR)myclass, TEXT("title"),
                                      WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
                                      WIDTH, HEIGHT, 0, 0, GetModuleHandle(0), 0);
         if (window)
@@ -101,7 +101,7 @@ GPUTextureViewID CreateTextureView(GPUTextureID texture)
     GPUTextureViewDescriptor desc{};
     desc.pTexture        = texture;
     desc.format          = (EGPUFormat)texture->format;
-    desc.usage           = EGPUTexutreViewUsage::GPU_TVU_SRV;
+    desc.usages          = EGPUTexutreViewUsage::GPU_TVU_SRV;
     desc.aspectMask      = EGPUTextureViewAspect::GPU_TVA_COLOR;
     desc.baseMipLevel    = 0;
     desc.mipLevelCount   = 1;
@@ -184,7 +184,7 @@ int main(int argc, char** argv)
         GPUTextureViewDescriptor desc{};
         desc.pTexture        = pSwapchain->ppBackBuffers[i];
         desc.format          = (EGPUFormat)desc.pTexture->format;
-        desc.usage           = EGPUTexutreViewUsage::GPU_TVU_RTV_DSV;
+        desc.usages          = EGPUTexutreViewUsage::GPU_TVU_RTV_DSV;
         desc.aspectMask      = EGPUTextureViewAspect::GPU_TVA_COLOR;
         desc.baseMipLevel    = 0;
         desc.mipLevelCount   = 1;

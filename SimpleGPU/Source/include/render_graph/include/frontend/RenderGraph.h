@@ -33,6 +33,7 @@ public:
 
     EGPUResourceState GetLastestState(const TextureNode* texture, const PassNode* pending_pass);
     void ForeachWriterPass(const TextureHandle handle, const std::function<void(TextureNode* texture, PassNode* pass, RenderGraphEdge* edge)>&);
+    void ForeachReaderPass(const TextureHandle handle, const std::function<void(TextureNode* texture, PassNode* pass, RenderGraphEdge* edge)>&);
 
     class RenderPassBuilder
     {
@@ -41,7 +42,11 @@ public:
     protected:
         RenderPassBuilder(RenderGraph& graph, RenderPassNode& node);
     public:
+        RenderPassBuilder& SetName(const char* name);
         RenderPassBuilder& Write(TextureRTVHandle handle);
+        RenderPassBuilder& Read(const char* name, TextureSRVHandle handle);
+        RenderPassBuilder& SetRootSignature(GPURootSignatureID rs);
+        //pipeline
     private:
         RenderGraph& mGraph;
         RenderPassNode& mPassNode;
@@ -57,6 +62,8 @@ public:
         TextureBuilder(RenderGraph& graph, TextureNode& textureNode);
     public:
         TextureBuilder& Import(GPUTextureID texture, EGPUResourceState initedState);
+        TextureBuilder& SetName(const char* name);
+        //todo: all setters
     private:
         RenderGraph& mGraph;
         TextureNode& mTextureNode;

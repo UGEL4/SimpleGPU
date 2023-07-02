@@ -48,6 +48,8 @@ public:
     virtual bool Clear() = 0;
     virtual uint32_t ForeachIncomingEdges(Node* node, const std::function<void(Node* from, Node* to, Edge* edge)>&) = 0;
     virtual uint32_t ForeachIncomingEdges(dep_graph_handle_t handle, const std::function<void(Node* from, Node* to, Edge* edge)>&) = 0;
+    virtual uint32_t ForeachOutgoingEdges(Node* node, const std::function<void(Node* from, Node* to, Edge* edge)>&) = 0;
+    virtual uint32_t ForeachOutgoingEdges(dep_graph_handle_t handle, const std::function<void(Node* from, Node* to, Edge* edge)>&) = 0;
 };
 
 inline DependencyGraphNode* DependencyGraphEdge::From()

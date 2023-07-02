@@ -8,6 +8,7 @@
 #include "extensions/GPUVulkanEXTs.h"
 #include "backend/vulkan/GPUVulkanUtils.h"
 #include "backend/vulkan/vma/vk_mem_alloc.h"
+#include "Utils.h"
 
 class VulkanBlackboard
 {
@@ -1027,7 +1028,7 @@ GPUTextureViewID GPUCreateTextureView_Vulkan(GPUDeviceID pDevice, const GPUTextu
     createInfo.subresourceRange.layerCount     = pDesc->arrayLayerCount;
 
     pVkTextureView->pVkSRVDescriptor = VK_NULL_HANDLE;
-    if (pDesc->usage & EGPUTexutreViewUsage::GPU_TVU_SRV)
+    if (pDesc->usages & EGPUTexutreViewUsage::GPU_TVU_SRV)
     {
         if (pVkDevice->mVkDeviceTable.vkCreateImageView(pVkDevice->pDevice,
                                                         &createInfo,
@@ -1038,7 +1039,7 @@ GPUTextureViewID GPUCreateTextureView_Vulkan(GPUDeviceID pDevice, const GPUTextu
         }
     }
     pVkTextureView->pVkUAVDescriptor = VK_NULL_HANDLE;
-    if (pDesc->usage & EGPUTexutreViewUsage::GPU_TVU_UAV)
+    if (pDesc->usages & EGPUTexutreViewUsage::GPU_TVU_UAV)
     {
         VkImageViewCreateInfo tmp = createInfo;
         // #NOTE : We dont support imageCube, imageCubeArray for consistency with other APIs
@@ -1057,7 +1058,7 @@ GPUTextureViewID GPUCreateTextureView_Vulkan(GPUDeviceID pDevice, const GPUTextu
         }
     }
     pVkTextureView->pVkRTVDSVDescriptor = VK_NULL_HANDLE;
-    if (pDesc->usage & EGPUTexutreViewUsage::GPU_TVU_RTV_DSV)
+    if (pDesc->usages & EGPUTexutreViewUsage::GPU_TVU_RTV_DSV)
     {
         if (pVkDevice->mVkDeviceTable.vkCreateImageView(pVkDevice->pDevice,
                                                         &createInfo,
@@ -2076,14 +2077,14 @@ inline static char8_t* duplicate_string(const char8_t* src_string)
 }
 
 #include <set>
-// ����һ���ǳ����ӵĹ��̣�ǣ����������move��join������������߼����£�
-// 1.�ռ�����ShaderStage�г��ֵ�����ShaderResource�����������Ƿ��ظ�
-//   ����׶�Ҳ���ռ����е�RootConst�����Ҷ����ǽ��кϲ�����ͬ�׶γ��ֵ���ͬRootConst��Stage�ϲ���
-//   Ҳ���ռ����е�StaticSamplers
-// 2.�ϲ�ShaderResources��RootSignatureTable���³�ΪRST����
-//   ӵ����ͬset��binding�Լ�type�ġ������ڲ�ͬShaderStage�е�ShaderResource�ᱻ�ϲ�Stage
-// 3.�з���
-//   ����Set�Ѻϲ��õ�Resource�ָ�Ž�roosting::tables��
+// 这是一个非常复杂的过程，牵扯到大量的move和join操作。具体的逻辑如下：
+// 1.收集所有ShaderStage中出现的所有ShaderResource，不管他们是否重复
+//   这个阶段也会收集所有的RootConst，并且对它们进行合并（不同阶段出现的相同RootConst的Stage合并）
+//   也会收集所有的StaticSamplers
+// 2.合并ShaderResources到RootSignatureTable（下称为RST）中
+//   拥有相同set、binding以及type的、出现在不同ShaderStage中的ShaderResource会被合并Stage
+// 3.切分行
+//   按照Set把合并好的Resource分割并放进roosting::tables中
 void CGPUUtil_InitRSParamTables(GPURootSignature* RS, const struct GPURootSignatureDescriptor* desc)
 {
     GPUShaderReflection* entry_reflections[32] = { 0 };
@@ -2142,8 +2143,8 @@ void CGPUUtil_InitRSParamTables(GPURootSignature* RS, const struct GPURootSignat
                 bool coincided = false;
                 for (auto&& static_sampler : all_static_samplers)
                 {
-                    //if (static_sampler.name_hash == resource.name_hash &&
-                    if (strcmp((const char*)static_sampler.name, (const char*)resource.name) == 0 &&
+                    if (static_sampler.name_hash == resource.name_hash &&
+                    //if (strcmp((const char*)static_sampler.name, (const char*)resource.name) == 0 &&
                         static_sampler.set == resource.set &&
                         static_sampler.binding == resource.binding)
                     {
@@ -3119,9 +3120,11 @@ void GPUUpdateDescriptorSet_Vulkan(GPUDescriptorSetID set, const GPUDescriptorDa
         if (pParam->name != nullptr)
         {
             //size_t argNameHash = cgpu_name_hash(pParam->name, strlen(pParam->name));
+            uint64_t argNameHash = GPUNameHash((const char*)pParam->name);
             for (uint32_t p = 0; p < ParamTable->resources_count; p++)
             {
-                if (strcmp((const char*)ParamTable->resources[p].name, (const char*)pParam->name) == 0)
+                //if (strcmp((const char*)ParamTable->resources[p].name, (const char*)pParam->name) == 0)
+                if (argNameHash == ParamTable->resources[p].name_hash)
                 {
                     ResData = ParamTable->resources + p;
                 }
@@ -3150,6 +3153,24 @@ void GPUUpdateDescriptorSet_Vulkan(GPUDescriptorSetID set, const GPUDescriptorDa
                 {
                     // TODO: Stencil support
                     assert(pParam->textures[arr] && "cgpu_assert: Binding NULL texture!");
+                    //这里会有内存操作越界的风险，例如： shander使用了static sampler
+                    /*
+                    * frg shader file:
+                        layout(set = 0, binding = 0) uniform sampler texSamp; //static sampler
+                        layout(set = 0, binding = 1) uniform texture2D tex;
+                        
+                    ----
+                        在创建root signature 是指定了 static sampler 的话:
+                        GPURootSignatureDescriptor rootRSDesc     = {};
+                        rootRSDesc.static_sampler_names           = &sampler_name;
+                        rootRSDesc.static_sampler_count           = 1;
+                        rootRSDesc.static_samplers                = &texture_sampler;
+
+                        那么 shander 的 resource就只有1个，即：ParamTable->resources_count = 1；
+                        导致创建root signature 时 VkDescriptorUpdateData 只分配了1个，
+                        更新这里的 shader 资源 tex 时，ResData->binding = 1；
+                        那么操作 pUpdateData[1 + arr]就会访问越界，但这里是指针不会报错，在释放GPUDescriptorSet_Vulkan就会报错
+                    */
                     VkDescriptorUpdateData* Data = &pUpdateData[ResData->binding + arr];
                     Data->mImageInfo.imageView   = ResData->type == GPU_RESOURCE_TYPE_RW_TEXTURE ? TextureViews[arr]->pVkUAVDescriptor : TextureViews[arr]->pVkSRVDescriptor;
                     Data->mImageInfo.imageLayout = ResData->type == GPU_RESOURCE_TYPE_RW_TEXTURE ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;

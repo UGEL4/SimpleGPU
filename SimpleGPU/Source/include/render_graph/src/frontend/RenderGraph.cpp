@@ -85,6 +85,18 @@ EGPUResourceState RenderGraph::GetLastestState(const TextureNode* texture, const
     });
 
     //each read pass
+    ForeachReaderPass(texture->GetHandle(), [&](TextureNode* tex, PassNode* pass, RenderGraphEdge* edge)
+    {
+        if (edge->type == ERelationshipType::TextureRead)
+        {
+            auto readEdge = static_cast<TextureReadEdge*>(edge);
+            if (pass->After(pass_iter) && pass->Before(pending_pass))
+            {
+                pass_iter = pass;
+                result    = readEdge->mRequestedState;
+            }
+        }
+    });
 
     return result;
 }
@@ -100,11 +112,28 @@ void RenderGraph::ForeachWriterPass(const TextureHandle handle, const std::funct
     });
 }
 
+void RenderGraph::ForeachReaderPass(const TextureHandle handle, const std::function<void(TextureNode* texture, PassNode* pass, RenderGraphEdge* edge)>& func)
+{
+    m_pGraph->ForeachOutgoingEdges(handle, [&](DependencyGraphNode* from, DependencyGraphNode* to, DependencyGraphEdge* e) 
+    {
+        PassNode* node            = static_cast<PassNode*>(to);
+        TextureNode* tex          = static_cast<TextureNode*>(from);
+        RenderGraphEdge* tex_edge = static_cast<RenderGraphEdge*>(e);
+        func(tex, node, tex_edge);
+    });
+}
+
 ///////////RenderPassBuilder//////////////////
 RenderGraph::RenderPassBuilder::RenderPassBuilder(RenderGraph& graph, RenderPassNode& node)
 : mGraph(graph), mPassNode(node)
 {
 
+}
+
+RenderGraph::RenderPassBuilder& RenderGraph::RenderPassBuilder::SetName(const char* name)
+{
+    if (name) mPassNode.SetName(name);
+    return *this;
 }
 
 RenderGraph::RenderPassBuilder& RenderGraph::RenderPassBuilder::Write(TextureRTVHandle handle)
@@ -113,6 +142,20 @@ RenderGraph::RenderPassBuilder& RenderGraph::RenderPassBuilder::Write(TextureRTV
     TextureWriteEdge* edge = new TextureWriteEdge(handle);
     mPassNode.mOutTextureEdges.emplace_back(edge);
     mGraph.m_pGraph->Link(&mPassNode, mGraph.m_pGraph->AccessNode(handle.mThis), edge);
+    return *this;
+}
+
+RenderGraph::RenderPassBuilder& RenderGraph::RenderPassBuilder::Read(const char* name, TextureSRVHandle handle)
+{
+    TextureReadEdge* edge = new TextureReadEdge(name, handle);
+    mPassNode.mInTextureEdges.emplace_back(edge);
+    mGraph.m_pGraph->Link(mGraph.m_pGraph->AccessNode(handle.mThis), &mPassNode, edge);
+    return *this;
+}
+
+RenderGraph::RenderPassBuilder& RenderGraph::RenderPassBuilder::SetRootSignature(GPURootSignatureID rs)
+{
+    mPassNode.m_pRootSignature = rs;
     return *this;
 }
 
@@ -143,14 +186,19 @@ RenderGraph::TextureBuilder& RenderGraph::TextureBuilder::Import(GPUTextureID te
 {
     mTextureNode.m_pFrameTexture    = texture;
     mTextureNode.mInitState         = initedState;
-    if (texture)
-    {mTextureNode.mDesc.width        = texture->width;
+    mTextureNode.mDesc.width        = texture->width;
     mTextureNode.mDesc.height       = texture->height;
     mTextureNode.mDesc.depth        = texture->depth;
     mTextureNode.mDesc.array_size   = texture->arraySizeMinusOne + 1;
     mTextureNode.mDesc.format       = (EGPUFormat)texture->format;
-    mTextureNode.mDesc.sample_count = texture->sampleCount;}
-    mTextureNode.mInported          = texture;
+    mTextureNode.mDesc.sample_count = texture->sampleCount;
+    mTextureNode.mImported          = texture;
+    return *this;
+}
+
+RenderGraph::TextureBuilder& RenderGraph::TextureBuilder::SetName(const char* name)
+{
+    mTextureNode.SetName(name);
     return *this;
 }
 

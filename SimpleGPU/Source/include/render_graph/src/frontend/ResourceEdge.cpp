@@ -1,6 +1,7 @@
 #include "render_graph/include/frontend/ResourceEdge.hpp"
 #include "render_graph/include/frontend/PassNode.hpp"
 #include "render_graph/include/frontend/ResourceNode.hpp"
+#include "Utils.h"
 
 ///////////TextureEdge////////////////
 TextureEdge::TextureEdge(ERelationshipType type, EGPUResourceState requestedState)
@@ -23,5 +24,25 @@ PassNode* TextureWriteEdge::GetPassNode()
 TextureNode* TextureWriteEdge::GetTextureNode()
 {
     return (TextureNode*)To();
+}
+///////////TextureWriteEdge////////////////
+
+///////////TextureWriteEdge////////////////
+TextureReadEdge::TextureReadEdge(const std::string_view& name, TextureSRVHandle handle, EGPUResourceState requestedState)
+: TextureEdge(ERelationshipType::TextureRead, requestedState)
+, mNameHash(GPUNameHash(name.data()))
+, mName(name)
+, mTextureHandle(handle)
+{
+
+}
+PassNode* TextureReadEdge::GetPassNode()
+{
+    return (PassNode*)To();
+}
+
+TextureNode* TextureReadEdge::GetTextureNode()
+{
+    return (TextureNode*)From();
 }
 ///////////TextureWriteEdge////////////////

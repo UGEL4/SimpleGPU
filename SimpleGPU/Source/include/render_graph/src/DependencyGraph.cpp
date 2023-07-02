@@ -13,6 +13,8 @@ public:
     virtual bool Clear() final;
     virtual uint32_t ForeachIncomingEdges(Node* node, const std::function<void(Node* from, Node* to, Edge* edge)>& func) final;
     virtual uint32_t ForeachIncomingEdges(dep_graph_handle_t handle, const std::function<void(Node* from, Node* to, Edge* edge)>& func) final;
+    virtual uint32_t ForeachOutgoingEdges(Node* node, const std::function<void(Node* from, Node* to, Edge* edge)>& func) final;
+    virtual uint32_t ForeachOutgoingEdges(dep_graph_handle_t handle, const std::function<void(Node* from, Node* to, Edge* edge)>& func) final;
 
 protected:
     vertex_descriptor GetDescriptor(Node* node)
@@ -66,7 +68,24 @@ uint32_t DependencyGraphImp::ForeachIncomingEdges(Node* node, const std::functio
 uint32_t DependencyGraphImp::ForeachIncomingEdges(dep_graph_handle_t handle, const std::function<void(Node* from, Node* to, Edge* edge)>& func)
 {
     uint32_t count = 0;
-    auto oedges = boost::in_edges((vertex_descriptor)handle, *this);
+    auto iedges = boost::in_edges((vertex_descriptor)handle, *this);
+    for (auto iter = iedges.first; iter != iedges.second; ++iter)
+    {
+        func(NodeAt(iter->m_source), NodeAt(iter->m_target), (*this)[*iter]);
+        count++;
+    }
+    return count;
+}
+
+uint32_t DependencyGraphImp::ForeachOutgoingEdges(Node* node, const std::function<void(Node* from, Node* to, Edge* edge)>& func)
+{
+    return ForeachOutgoingEdges(node->mId, func);
+}
+
+uint32_t DependencyGraphImp::ForeachOutgoingEdges(dep_graph_handle_t handle, const std::function<void(Node* from, Node* to, Edge* edge)>& func)
+{
+    uint32_t count = 0;
+    auto oedges = boost::out_edges((vertex_descriptor)handle, *this);
     for (auto iter = oedges.first; iter != oedges.second; ++iter)
     {
         func(NodeAt(iter->m_source), NodeAt(iter->m_target), (*this)[*iter]);

@@ -55,13 +55,25 @@ struct ObjectHandle<EObjectType::Texture>
     {
         friend struct ObjectHandle<EObjectType::Texture>;
         friend class RenderGraph;
-        friend class TextureRenderEdge;
+        friend class TextureWriteEdge;
         ShaderWriteHandle(const handle_t _this) : mThis(_this) {}
         inline operator ObjectHandle<EObjectType::Texture>() const { return ObjectHandle<EObjectType::Texture>(mThis); }
     private:
         handle_t mThis;
     };
     inline operator ShaderWriteHandle() const { return ShaderWriteHandle(mHandle); }
+
+    struct ShaderReadHandle
+    {
+        friend struct ObjectHandle<EObjectType::Texture>;
+        friend class RenderGraph;
+        friend class TextureReadEdge;
+        ShaderReadHandle(const handle_t _this) : mThis(_this) {}
+        inline operator ObjectHandle<EObjectType::Texture>() const { return ObjectHandle<EObjectType::Texture>(mThis); }
+    private:
+        handle_t mThis;
+    };
+    inline operator ShaderReadHandle() const { return ShaderReadHandle(mHandle); }
 
     inline operator handle_t() const { return mHandle; }
     ObjectHandle() {}
@@ -74,19 +86,20 @@ protected:
 private:
     handle_t mHandle;
 };
-using TextureHandle = ObjectHandle<EObjectType::Texture>;
+using TextureHandle    = ObjectHandle<EObjectType::Texture>;
 using TextureRTVHandle = TextureHandle::ShaderWriteHandle;
+using TextureSRVHandle = TextureHandle::ShaderReadHandle;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 struct RenderGraphNode : public DependencyGraphNode
 {
-    RenderGraphNode(EObjectType type) : type(type){}
-    /* SKR_RENDER_GRAPH_API void set_name(const char8_t* n);
-    SKR_RENDER_GRAPH_API const char8_t* get_name() const; */
+    RenderGraphNode(EObjectType type) : type(type) {}
+    void SetName(const char* name) { mName = name; }
+    const char* GetName() const { return mName.c_str(); }
     const EObjectType type;
     const uint32_t pooled_size = 0;
 protected:
-    //graph_object_string name = u8"";
+    std::string mName = "";
 };
 
 struct RenderGraphEdge : public DependencyGraphEdge

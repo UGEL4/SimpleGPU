@@ -12,6 +12,10 @@ void PassNode::ForEachTextures(const std::function<void(TextureNode*, TextureEdg
     {
         func(e->GetTextureNode(), e);
     }
+    for (auto e : mInTextureEdges)
+    {
+        func(e->GetTextureNode(), e);
+    }
 }
 
 const bool PassNode::Before(const PassNode* other) const
@@ -25,8 +29,18 @@ const bool PassNode::After(const PassNode* other) const
     return (mOrder > other->mOrder);
 }
 
+std::span<TextureReadEdge*> PassNode::GetTextureReadEdges()
+{
+    return std::span<TextureReadEdge*>(mInTextureEdges.data(), mInTextureEdges.size());
+}
+
+std::span<TextureWriteEdge*> PassNode::GetTextureWriteEdges()
+{
+    return std::span<TextureWriteEdge*>(mOutTextureEdges.data(), mOutTextureEdges.size());
+}
+
 PassNode::PassNode(EPassType type, uint32_t order)
-: RenderGraphNode(EObjectType::Pass), mOrder(order)
+: RenderGraphNode(EObjectType::Pass), mOrder(order), mCanBeLone(false)
 {
 
 }

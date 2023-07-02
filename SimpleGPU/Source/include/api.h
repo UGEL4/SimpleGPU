@@ -876,7 +876,7 @@ extern "C" {
     {
         GPUTextureID pTexture;
         EGPUFormat format;
-        uint32_t usage;
+        uint32_t usages;
         uint32_t aspectMask;
         uint32_t baseMipLevel;
         uint32_t mipLevelCount;
