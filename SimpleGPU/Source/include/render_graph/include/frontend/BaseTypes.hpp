@@ -68,10 +68,19 @@ struct ObjectHandle<EObjectType::Texture>
         friend struct ObjectHandle<EObjectType::Texture>;
         friend class RenderGraph;
         friend class TextureReadEdge;
-        ShaderReadHandle(const handle_t _this) : mThis(_this) {}
+        ShaderReadHandle(const handle_t _this, uint32_t mipBase = 0, uint32_t mipCount = 1, uint32_t arrayBase = 0, uint32_t arrayCount = 1)
+        : mThis(_this), mMipBase(mipBase), mMipCount(mipCount), mArrayBase(arrayBase), mArrayCount(arrayCount)
+        {
+
+        }
         inline operator ObjectHandle<EObjectType::Texture>() const { return ObjectHandle<EObjectType::Texture>(mThis); }
     private:
         handle_t mThis;
+        uint32_t mMipBase        = 0;
+        uint32_t mMipCount       = 1;
+        uint32_t mArrayBase      = 0;
+        uint32_t mArrayCount     = 1;
+        EGPUTextureDimension dim = GPU_TEX_DIMENSION_2D;
     };
     inline operator ShaderReadHandle() const { return ShaderReadHandle(mHandle); }
 

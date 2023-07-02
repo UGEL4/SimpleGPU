@@ -5,12 +5,12 @@
 
 DEFINE_GPU_OBJECT(GPUBindTable)
 
-typedef struct GPUXBindTableDescriptor
+typedef struct GPUBindTableDescriptor
 {
     GPURootSignatureID pRootSignature;
     const char** ppNames;
     uint32_t namesCount;
-} GPUXBindTableDescriptor;
+} GPUBindTableDescriptor;
 
 struct GPUBindTableLocation;
 typedef struct GPUBindTableValue
@@ -39,7 +39,7 @@ typedef struct GPUBindTableLocation
 
 typedef struct GPUBindTable
 {
-    static GPUBindTableID Create(GPUDeviceID device, const GPUXBindTableDescriptor* desc);
+    static GPUBindTableID Create(GPUDeviceID device, const GPUBindTableDescriptor* desc);
     static void Free(GPUBindTableID table);
 
     void Bind(GPURenderPassEncoderID encoder) const;
@@ -67,7 +67,7 @@ struct EqualTo<GPUDescriptorData>
 };
 
 /////////////////////////
-GPUBindTableID GPUCreateBindTable(GPUDeviceID device, const GPUXBindTableDescriptor* desc);
+GPUBindTableID GPUCreateBindTable(GPUDeviceID device, const GPUBindTableDescriptor* desc);
 void GPUFreeBindTable(GPUBindTableID table);
 void GPUBindTableUpdate(GPUBindTableID table, const GPUDescriptorData* datas, uint32_t count);
 void GPURenderEncoderBindBindTable(GPURenderPassEncoderID encoder, GPUBindTableID table);

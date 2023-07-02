@@ -44,6 +44,11 @@ public:
     virtual PassNode* GetPassNode() final;
     virtual TextureNode* GetTextureNode() final;
 
+    const uint32_t GetMipBase() const { return mTextureHandle.mMipBase; }
+    const uint32_t GetMipCount() const { return mTextureHandle.mMipCount; }
+    const uint32_t GetArrayBase() const { return mTextureHandle.mArrayBase; }
+    const uint32_t GetArrayCount() const { return mTextureHandle.mArrayCount; }
+
 private:
     uint64_t mNameHash;
     std::string mName; // shader resource name

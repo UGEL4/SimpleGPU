@@ -92,6 +92,8 @@ void RenderGraphBackend::Initialize()
     {
         mExecutors[i].Initialize(m_pDevice, m_pQueue);
     }
+    mTexturePool.Initialize(m_pDevice);
+    mTextureViewPool.Initialize(m_pDevice);
 }
 
 void RenderGraphBackend::Finalize()
@@ -160,6 +162,13 @@ GPUBindTableID RenderGraphBackend::AllocateAndUpdatePassBindTable(RenderGraphFra
         auto texReadEdges = pass->GetTextureReadEdges();
 
         // Allocate or get descriptor set heap
+        auto iter = executor.mBindTablePools.find(root_sig);
+        if (iter == executor.mBindTablePools.end())
+        {
+            void* ptr           = calloc(1, sizeof(BindTablePool));
+            BindTablePool* pool = new (ptr) BindTablePool(root_sig);
+            executor.mBindTablePools.emplace(root_sig, pool);
+        }
         // Bind resources
         std::string bind_table_keys = "";
         std::vector<GPUDescriptorData> desc_set_updates;
@@ -182,10 +191,10 @@ GPUBindTableID RenderGraphBackend::AllocateAndUpdatePassBindTable(RenderGraphFra
             update.binding = res.binding;
             GPUTextureViewDescriptor view_desc = {};
             view_desc.pTexture                 = Resolve(executor, *texture_readed);
-            /* view_desc.baseArrayLayer           = readEdge->get_array_base();
-            view_desc.arrayLayerCount          = readEdge->get_array_count();
-            view_desc.baseMipLevel             = readEdge->get_mip_base();
-            view_desc.mipLevelCount            = readEdge->get_mip_count();
+            view_desc.baseArrayLayer           = readEdge->GetArrayBase();
+            view_desc.arrayLayerCount          = readEdge->GetArrayCount();
+            view_desc.baseMipLevel             = readEdge->GetMipBase();
+            view_desc.mipLevelCount            = readEdge->GetMipCount();
             view_desc.format                   = (EGPUFormat)view_desc.pTexture->format;
             //const bool is_depth_stencil = FormatUtil_IsDepthStencilFormat(view_desc.format);
             bool is_depth_stencil = false;
@@ -205,8 +214,8 @@ GPUBindTableID RenderGraphBackend::AllocateAndUpdatePassBindTable(RenderGraphFra
                 GPU_TVA_COLOR;
             view_desc.usages = GPU_TVU_SRV;
             //view_desc.dims = read_edge->get_dimension();
-            SRVs[i] = texture_view_pool.allocate(view_desc, mFrameIndex);
-            update.textures = &SRVs[i]; */
+            SRVs[i] = mTextureViewPool.Allocate(view_desc, mFrameIndex);
+            update.textures = &SRVs[i];
             desc_set_updates.emplace_back(update);
         }
     }

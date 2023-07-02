@@ -15,7 +15,7 @@ void GPUBindTableValue::Initialize(const GPUBindTableLocation& loc, const GPUDes
     mData.ptrs = mResources.data();
 }
 
-GPUBindTableID GPUBindTable::Create(GPUDeviceID device, const GPUXBindTableDescriptor* desc)
+GPUBindTableID GPUBindTable::Create(GPUDeviceID device, const GPUBindTableDescriptor* desc)
 {
     GPURootSignatureID rs  = desc->pRootSignature;
     uint64_t hashsSize     = desc->namesCount * sizeof(uint64_t);
@@ -164,7 +164,7 @@ bool EqualTo<GPUDescriptorData>::operator()(const GPUDescriptorData& a, const GP
 }
 
 /////////////////////////////////////////////////////
-GPUBindTableID GPUCreateBindTable(GPUDeviceID device, const GPUXBindTableDescriptor* desc)
+GPUBindTableID GPUCreateBindTable(GPUDeviceID device, const GPUBindTableDescriptor* desc)
 {
     return GPUBindTable::Create(device, desc);
 }

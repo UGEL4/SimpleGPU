@@ -3,6 +3,10 @@
 #include "render_graph/include/frontend/RenderGraph.h"
 #include "api.h"
 #include "GPUBindTable.hpp"
+#include "render_graph/include/backend/TexturePool.hpp"
+#include "render_graph/include/backend/TextureViewPool.hpp"
+#include "render_graph/include/backend/BindTablePool.hpp"
+#include <unordered_map>
 
 #define RG_MAX_FRAME_IN_FILGHT 3
 
@@ -19,6 +23,7 @@ private:
     GPUCommandPoolID m_pCommandPool = nullptr;
     GPUCommandBufferID m_pCmd       = nullptr;
     GPUFenceID m_pFence             = nullptr;
+    std::unordered_map<GPURootSignatureID, BindTablePool*> mBindTablePools;
 };
 
 class RenderGraphBackend : public RenderGraph
@@ -44,4 +49,6 @@ private:
     GPUDeviceID m_pDevice;
     GPUQueueID m_pQueue;
     RenderGraphFrameExecutor mExecutors[RG_MAX_FRAME_IN_FILGHT];
+    RG::TexturePool mTexturePool;
+    RG::TextureViewPool mTextureViewPool;
 };
