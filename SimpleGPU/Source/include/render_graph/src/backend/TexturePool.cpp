@@ -61,7 +61,7 @@ namespace RG
         auto& pool = mTextures[key];
         for (auto&& iter : pool)
         {
-            if (iter.m_pTexture == texture) return; //只剩1个texture
+            if (iter.m_pTexture == texture) return;
         }
         pool.emplace_back(texture, final_state, mark);
     }

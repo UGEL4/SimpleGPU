@@ -18,14 +18,20 @@ struct NodeAndEdgeFactory
             pooled_size = (uint32_t)sizeof(T);
             return allocated;
         }
-        return SkrNew<T>(std::forward<Args>(args)...);
+        void* ptr = calloc(1, sizeof(T));
+        T* newT   = new (ptr) T(std::forward<Args>(args)...);
+        return newT;
     }
 
     template<typename T>
     void Dealloc(T* object)
     {
         if (InternalFree<T>(object)) return;
-        SkrDelete(object);
+        if (object)
+        {
+            object->~T();
+            free(object);
+        }
     }
 
     template<typename T>
@@ -42,7 +48,11 @@ struct NodeAndEdgeFactory
             object->~T();
             return internalFreeMemory(object, object->pooled_size);
         }
-        SkrDelete(object);
+        if (object)
+        {
+            object->~T();
+            free(object);
+        }
         return true;
     }
 

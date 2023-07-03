@@ -27,8 +27,18 @@ namespace RG
         };
         struct Key
         {
-            const GPUDeviceID m_pDevice;
-            const GPUTextureID m_pTexture;
+            const GPUDeviceID m_pDevice   = nullptr;
+            const GPUTextureID m_pTexture = nullptr;
+            EGPUFormat format             = GPU_FORMAT_UNDEFINED;
+            uint32_t usages               = 0;
+            uint32_t aspectMask           = 0;
+            uint32_t baseMipLevel         = 0;
+            uint32_t mipLevelCount        = 0;
+            uint32_t baseArrayLayer       = 0;
+            uint32_t arrayLayerCount      = 0;
+            uint32_t width                = 0;
+            uint32_t heught               = 0;
+
             operator size_t() const;
             friend class TextureViewPool;
             struct hasher

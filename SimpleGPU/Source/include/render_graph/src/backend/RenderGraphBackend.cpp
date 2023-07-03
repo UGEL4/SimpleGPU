@@ -26,6 +26,16 @@ void RenderGraphFrameExecutor::Finalize()
     m_pCommandPool = nullptr;
     m_pCmd         = nullptr;
     m_pFence       = nullptr;
+    for (auto iter : mBindTablePools)
+    {
+        if (iter.second)
+        {
+            iter.second->Destroy();
+            iter.second->~BindTablePool();
+            free(iter.second);
+        }
+    }
+    mBindTablePools.clear();
 }
 
 void RenderGraphFrameExecutor::ResetOnStart()
