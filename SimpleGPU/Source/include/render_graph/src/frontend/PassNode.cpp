@@ -8,11 +8,11 @@ const PassHandle PassNode::GetHandle() const
 
 void PassNode::ForEachTextures(const std::function<void(TextureNode*, TextureEdge*)>& func)
 {
-    for (auto e : mOutTextureEdges)
+    for (auto e : GetTextureReadEdges())
     {
         func(e->GetTextureNode(), e);
     }
-    for (auto e : mInTextureEdges)
+    for (auto e : GetTextureWriteEdges())
     {
         func(e->GetTextureNode(), e);
     }

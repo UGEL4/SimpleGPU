@@ -58,10 +58,43 @@ struct ObjectHandle<EObjectType::Texture>
         friend class TextureWriteEdge;
         ShaderWriteHandle(const handle_t _this) : mThis(_this) {}
         inline operator ObjectHandle<EObjectType::Texture>() const { return ObjectHandle<EObjectType::Texture>(mThis); }
+        ShaderWriteHandle WriteMip(uint32_t level) const
+        {
+            ShaderWriteHandle handle = *this;
+            handle.mMipBase          = level;
+            return handle;
+        }
+        ShaderWriteHandle WriteArray(uint32_t base, uint32_t count) const
+        {
+            ShaderWriteHandle handle = *this;
+            handle.mArrayBase        = base;
+            handle.mArrayCount       = count;
+            return handle;
+        }
     private:
         handle_t mThis;
+        uint32_t mMipBase     = 0;
+        uint32_t mArrayBase   = 0;
+        uint32_t mArrayCount  = 1;
     };
     inline operator ShaderWriteHandle() const { return ShaderWriteHandle(mHandle); }
+
+    struct DepthStencilHandle : public ShaderWriteHandle
+    {
+        friend struct ObjectHandle<EObjectType::Texture>;
+        friend class RenderGraph;
+        friend class TextureWriteEdge;
+        DepthStencilHandle(const handle_t _this) : ShaderWriteHandle(_this) {}
+        DepthStencilHandle ClearDepth(float depth) const
+        {
+            DepthStencilHandle handle = *this;
+            handle.mClearDepth = depth;
+            return handle;
+        }
+    private:
+        float mClearDepth = 0.f;
+    };
+    inline operator DepthStencilHandle() const { return DepthStencilHandle(mHandle); }
 
     struct ShaderReadHandle
     {
@@ -98,6 +131,7 @@ private:
 using TextureHandle    = ObjectHandle<EObjectType::Texture>;
 using TextureRTVHandle = TextureHandle::ShaderWriteHandle;
 using TextureSRVHandle = TextureHandle::ShaderReadHandle;
+using TextureDSVHandle = TextureHandle::DepthStencilHandle;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 struct RenderGraphNode : public DependencyGraphNode
@@ -133,6 +167,7 @@ struct PassContext
 struct RenderPassContext : public PassContext
 {
     GPURenderPassEncoderID m_pEncoder;
+    const struct GPUBindTable* m_pBindTable;
 };
 
 using RenderPassExecuteFunction = std::function<void(RenderGraph&, RenderPassContext&)>;

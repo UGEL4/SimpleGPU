@@ -3,12 +3,13 @@
 #include "api.h"
 #include <assert.h>
 #include <utility>
+#include "hash.h"
 
 namespace RG
 {
     TextureViewPool::Key::operator size_t() const
     {
-        return Utils::hash_val(this);
+        return Hash64(this, sizeof(*this), (size_t)m_pDevice);
     }
 
     TextureViewPool::Key::Key(GPUDeviceID device, const GPUTextureViewDescriptor& desc)

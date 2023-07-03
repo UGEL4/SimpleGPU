@@ -27,5 +27,5 @@ public:
 private:
     GPUTextureDescriptor mDesc = {};
     mutable GPUTextureID m_pFrameTexture;
-    EGPUResourceState mInitState;
+    mutable EGPUResourceState mInitState = GPU_RESOURCE_STATE_UNDEFINED;
 };

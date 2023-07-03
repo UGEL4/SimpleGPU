@@ -87,6 +87,8 @@ extern "C" {
         GPU_FORMAT_D16_UNORM_S8_UINT,
         GPU_FORMAT_D24_UNORM_S8_UINT,
         GPU_FORMAT_D32_SFLOAT_S8_UINT,
+        GPU_FORMAT_D16_UNORM,
+        GPU_FORMAT_D32_SFLOAT,
 		GPU_FORMAT_COUNT
 	} EGPUFormat;
 
@@ -1173,7 +1175,7 @@ extern "C" {
 
     typedef struct GPURenderPassDescriptor
     {
-        const char8_t* name;
+        const char* name;
         // TODO: support multi-target & remove this
         EGPUSampleCount sample_count;
         const GPUColorAttachment* color_attachments;

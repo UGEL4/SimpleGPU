@@ -15,6 +15,10 @@ public:
     virtual uint32_t ForeachIncomingEdges(dep_graph_handle_t handle, const std::function<void(Node* from, Node* to, Edge* edge)>& func) final;
     virtual uint32_t ForeachOutgoingEdges(Node* node, const std::function<void(Node* from, Node* to, Edge* edge)>& func) final;
     virtual uint32_t ForeachOutgoingEdges(dep_graph_handle_t handle, const std::function<void(Node* from, Node* to, Edge* edge)>& func) final;
+    virtual uint32_t ForeachNeighbors(Node* node, const std::function<void(DependencyGraphNode* neighbor)>&) final;
+    virtual uint32_t ForeachNeighbors(dep_graph_handle_t handle, const std::function<void(DependencyGraphNode* neighbor)>&) final;
+    virtual uint32_t ForeachNeighbors(const Node* node, const std::function<void(const DependencyGraphNode* neighbor)>&) const final;
+    virtual uint32_t ForeachNeighbors(const dep_graph_handle_t handle, const std::function<void(const DependencyGraphNode* neighbor)>&) const final;
 
 protected:
     vertex_descriptor GetDescriptor(Node* node)
@@ -94,6 +98,43 @@ uint32_t DependencyGraphImp::ForeachOutgoingEdges(dep_graph_handle_t handle, con
     return count;
 }
 
+uint32_t DependencyGraphImp::ForeachNeighbors(Node* node, const std::function<void(DependencyGraphNode* neighbor)>& func)
+{
+    return ForeachNeighbors(node->mId, func);
+}
+
+uint32_t DependencyGraphImp::ForeachNeighbors(dep_graph_handle_t handle, const std::function<void(DependencyGraphNode* neighbor)>& func)
+{
+    DAGVertex vert(handle);
+    auto neigs = boost::adjacent_vertices(vert, *this);
+    uint32_t count = 0;
+    for (auto iter = neigs.first; iter != neigs.second; iter++)
+    {
+        func((*this)[*iter]);
+        count++;
+    }
+    return count;
+}
+
+uint32_t DependencyGraphImp::ForeachNeighbors(const Node* node, const std::function<void(const DependencyGraphNode* neighbor)>& func) const
+{
+    return ForeachNeighbors(node->mId, func);
+}
+
+uint32_t DependencyGraphImp::ForeachNeighbors(const dep_graph_handle_t handle, const std::function<void(const DependencyGraphNode* neighbor)>& func) const
+{
+    DAGVertex vert(handle);
+    auto neigs = boost::adjacent_vertices(vert, *this);
+    uint32_t count = 0;
+    for (auto iter = neigs.first; iter != neigs.second; iter++)
+    {
+        func((*this)[*iter]);
+        count++;
+    }
+    return count;
+}
+
+
 //////////////////////////////////////////////////////////////////////////////
 DependencyGraph* DependencyGraph::Create()
 {
@@ -109,3 +150,14 @@ DependencyGraphBase* DependencyGraphBase::As(DependencyGraph* graph)
 {
     return (DependencyGraphImp*)graph;
 }
+
+/////////////////////////////////////DependencyGraphNode///////////////////////////////////////////
+uint32_t DependencyGraphNode::ForeachNeighbors(const std::function<void(DependencyGraphNode* neighbor)>& func)
+{
+    return m_pGraph->ForeachNeighbors(this, func);
+}
+uint32_t DependencyGraphNode::ForeachNeighbors(const std::function<void(const DependencyGraphNode* neighbor)>& func) const
+{
+    return m_pGraph->ForeachNeighbors(this, func);
+}
+/////////////////////////////////////DependencyGraphNode///////////////////////////////////////////

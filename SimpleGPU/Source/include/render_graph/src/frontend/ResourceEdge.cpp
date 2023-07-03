@@ -12,8 +12,8 @@ TextureEdge::TextureEdge(ERelationshipType type, EGPUResourceState requestedStat
 ///////////TextureEdge////////////////
 
 ///////////TextureWriteEdge////////////////
-TextureWriteEdge::TextureWriteEdge(TextureRTVHandle handle, EGPUResourceState requestedState)
-: TextureEdge(ERelationshipType::TextureWrite, requestedState), mTextureHandle(handle)
+TextureWriteEdge::TextureWriteEdge(uint32_t mrtIndex, TextureRTVHandle handle, EGPUResourceState requestedState)
+: TextureEdge(ERelationshipType::TextureWrite, requestedState), mTextureHandle(handle), mMRTIndex(mrtIndex)
 {
     
 }

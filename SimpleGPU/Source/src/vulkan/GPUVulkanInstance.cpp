@@ -1116,7 +1116,7 @@ GPUTextureID GPUCreateTexture_Vulkan(GPUDeviceID device, const GPUTextureDescrip
     VkDeviceMemory pVkDeviceMemory          = VK_NULL_HANDLE;
     uint32_t aspect_mask                    = 0;
     VmaAllocation vmaAllocation             = VK_NULL_HANDLE;
-    const bool is_depth_stencil             = FormatUtil_IsDepthStencilFormat(desc->format);
+    const bool is_depth_stencil             = Utils::FormatUtil_IsDepthStencilFormat(desc->format);
     const GPUFormatSupport* format_support = &A->adapterDetail.format_supports[desc->format];
     /*if (desc->native_handle && !(desc->flags & CGPU_INNER_TCF_IMPORT_SHARED_HANDLE))
     {

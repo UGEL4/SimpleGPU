@@ -42,4 +42,12 @@ public:
 private:
     RenderPassExecuteFunction mExecuteFunc;
     GPURootSignatureID m_pRootSignature = nullptr;;
+    GPURenderPipelineID m_pPipeline     = nullptr;
+    EGPULoadAction mLoadActions[GPU_MAX_MRT_COUNT + 1];
+    EGPUStoreAction mStoreActions[GPU_MAX_MRT_COUNT + 1];
+    EGPULoadAction mDepthLoadAction;
+    EGPUStoreAction mDepthStoreAction;
+    EGPULoadAction mStencilLoadAction;
+    EGPUStoreAction mStencilStoreAction;
+    float mClearDepth;
 };

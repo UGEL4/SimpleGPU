@@ -3,6 +3,7 @@
 #include "render_graph/include/frontend/PassNode.hpp"
 #include "render_graph/include/frontend/ResourceNode.hpp"
 #include "render_graph/include/frontend/ResourceEdge.hpp"
+#include "render_graph/include/frontend/NodeAndEdgeFactory.hpp"
 #include <iostream>
 
 ///////////RenderGraphBuilder//////////////////
@@ -46,19 +47,22 @@ void RenderGraph::Compile()
     std::cout << "RenderGraph::Compile()" << std::endl;
 }
 
-void RenderGraph::Execute()
+uint64_t RenderGraph::Execute()
 {
     std::cout << "RenderGraph::Execute" << std::endl;
     m_pGraph->Clear();
+    return mFrameIndex++;
 }
 
 void RenderGraph::Initialize()
 {
-    m_pGraph = DependencyGraph::Create();
+    m_pGraph      = DependencyGraph::Create();
+    m_pNAEFactory = NodeAndEdgeFactory::Create();
 }
 
 void RenderGraph::Finalize()
 {
+    NodeAndEdgeFactory::Destroy(m_pNAEFactory);
     DependencyGraph::Destroy(m_pGraph);
 }
 
@@ -136,12 +140,14 @@ RenderGraph::RenderPassBuilder& RenderGraph::RenderPassBuilder::SetName(const ch
     return *this;
 }
 
-RenderGraph::RenderPassBuilder& RenderGraph::RenderPassBuilder::Write(TextureRTVHandle handle)
+RenderGraph::RenderPassBuilder& RenderGraph::RenderPassBuilder::Write(uint32_t mrtIndex, TextureRTVHandle handle, EGPULoadAction load, EGPUStoreAction store)
 {
     //链接pass_node 和 resource_node
-    TextureWriteEdge* edge = new TextureWriteEdge(handle);
+    TextureWriteEdge* edge = new TextureWriteEdge(mrtIndex, handle);
     mPassNode.mOutTextureEdges.emplace_back(edge);
     mGraph.m_pGraph->Link(&mPassNode, mGraph.m_pGraph->AccessNode(handle.mThis), edge);
+    mPassNode.mLoadActions[mrtIndex]  = load;
+    mPassNode.mStoreActions[mrtIndex] = store;
     return *this;
 }
 
@@ -156,6 +162,28 @@ RenderGraph::RenderPassBuilder& RenderGraph::RenderPassBuilder::Read(const char*
 RenderGraph::RenderPassBuilder& RenderGraph::RenderPassBuilder::SetRootSignature(GPURootSignatureID rs)
 {
     mPassNode.m_pRootSignature = rs;
+    return *this;
+}
+
+RenderGraph::RenderPassBuilder& RenderGraph::RenderPassBuilder::SetPipeline(GPURenderPipelineID pipeline)
+{
+    mPassNode.m_pPipeline      = pipeline;
+    mPassNode.m_pRootSignature = pipeline->pRootSignature;
+    return *this;
+}
+
+RenderGraph::RenderPassBuilder& RenderGraph::RenderPassBuilder::SetDepthStencil(TextureDSVHandle handle,
+                                                                                EGPULoadAction depthLoad, EGPUStoreAction depthStore,
+                                                                                EGPULoadAction stencilLoad, EGPUStoreAction stencilStore)
+{
+    TextureWriteEdge* edge = new TextureWriteEdge(GPU_MAX_MRT_COUNT, handle, GPU_RESOURCE_STATE_DEPTH_WRITE);
+    mPassNode.mOutTextureEdges.emplace_back(edge);
+    mGraph.m_pGraph->Link(&mPassNode, mGraph.m_pGraph->AccessNode(handle.mThis), edge);
+    mPassNode.mDepthLoadAction    = depthLoad;
+    mPassNode.mDepthStoreAction   = depthStore;
+    mPassNode.mStencilLoadAction  = stencilLoad;
+    mPassNode.mStencilStoreAction = stencilStore;
+    mPassNode.mClearDepth         = handle.mClearDepth;
     return *this;
 }
 

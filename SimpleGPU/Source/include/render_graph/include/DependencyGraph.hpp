@@ -10,6 +10,8 @@ public:
     friend class DependencyGraphImp;
     DependencyGraphNode() = default;
     const dep_graph_handle_t GetId() const { return mId; }
+    uint32_t ForeachNeighbors(const std::function<void(DependencyGraphNode* neighbor)>&);
+    uint32_t ForeachNeighbors(const std::function<void(const DependencyGraphNode* neighbor)>&) const;
 protected:
     DependencyGraph*   m_pGraph;
     dep_graph_handle_t mId;
@@ -50,6 +52,10 @@ public:
     virtual uint32_t ForeachIncomingEdges(dep_graph_handle_t handle, const std::function<void(Node* from, Node* to, Edge* edge)>&) = 0;
     virtual uint32_t ForeachOutgoingEdges(Node* node, const std::function<void(Node* from, Node* to, Edge* edge)>&) = 0;
     virtual uint32_t ForeachOutgoingEdges(dep_graph_handle_t handle, const std::function<void(Node* from, Node* to, Edge* edge)>&) = 0;
+    virtual uint32_t ForeachNeighbors(Node* node, const std::function<void(DependencyGraphNode* neighbor)>&) = 0;
+    virtual uint32_t ForeachNeighbors(dep_graph_handle_t handle, const std::function<void(DependencyGraphNode* neighbor)>&) = 0;
+    virtual uint32_t ForeachNeighbors(const Node* node, const std::function<void(const DependencyGraphNode* neighbor)>&) const = 0;
+    virtual uint32_t ForeachNeighbors(const dep_graph_handle_t handle, const std::function<void(const DependencyGraphNode* neighbor)>&) const = 0;
 };
 
 inline DependencyGraphNode* DependencyGraphEdge::From()

@@ -19,6 +19,7 @@ public:
 
     void Initialize(GPUDeviceID gfxDevice, GPUQueueID gfxQueue);
     void Finalize();
+    void ResetOnStart();
 private:
     GPUCommandPoolID m_pCommandPool = nullptr;
     GPUCommandBufferID m_pCmd       = nullptr;
@@ -32,7 +33,7 @@ public:
     RenderGraphBackend(const RenderGraphBuilder& builder);
     ~RenderGraphBackend() = default;
 
-    virtual void Execute() override;
+    virtual uint64_t Execute() override;
     virtual void Initialize() override;
     virtual void Finalize() override;
 
@@ -44,6 +45,7 @@ private:
     GPUTextureID Resolve(RenderGraphFrameExecutor& executor, const TextureNode& texture);
     GPUBindTableID AllocateAndUpdatePassBindTable(RenderGraphFrameExecutor& executor, PassNode* pass, GPURootSignatureID root_sig);
     const GPUShaderResource* FindShaderResource(uint64_t nameHash, GPURootSignatureID rs, EGPUResourceType* type = nullptr) const;
+    void DeallocaResources(PassNode* pass);
 
 private:
     GPUDeviceID m_pDevice;

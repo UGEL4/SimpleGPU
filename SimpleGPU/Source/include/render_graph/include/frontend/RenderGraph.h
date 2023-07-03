@@ -27,7 +27,7 @@ public:
     static void Destroy(RenderGraph* graph);
 
     void Compile();
-    virtual void Execute();
+    virtual uint64_t Execute();
     virtual void Initialize();
     virtual void Finalize();
 
@@ -43,9 +43,11 @@ public:
         RenderPassBuilder(RenderGraph& graph, RenderPassNode& node);
     public:
         RenderPassBuilder& SetName(const char* name);
-        RenderPassBuilder& Write(TextureRTVHandle handle);
+        RenderPassBuilder& Write(uint32_t mrtIndex, TextureRTVHandle handle, EGPULoadAction load, EGPUStoreAction store);
         RenderPassBuilder& Read(const char* name, TextureSRVHandle handle);
         RenderPassBuilder& SetRootSignature(GPURootSignatureID rs);
+        RenderPassBuilder& SetPipeline(GPURenderPipelineID pipeline);
+        RenderPassBuilder& SetDepthStencil(TextureDSVHandle handle, EGPULoadAction depthLoad, EGPUStoreAction depthStore, EGPULoadAction stencilLoad, EGPUStoreAction stencilStore);
         //pipeline
     private:
         RenderGraph& mGraph;
@@ -76,6 +78,7 @@ public:
 
 protected:
     DependencyGraph* m_pGraph = nullptr;
+    struct NodeAndEdgeFactory* m_pNAEFactory = nullptr;
     std::vector<PassNode*> mPasses;
     std::vector<ResourceNode*> mResources;
     uint32_t mFrameIndex = 0;

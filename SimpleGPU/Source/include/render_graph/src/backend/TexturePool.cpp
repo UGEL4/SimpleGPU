@@ -1,5 +1,6 @@
 #include "render_graph/include/backend/TexturePool.hpp"
 #include "Utils.h"
+#include "hash.h"
 
 
 namespace RG
@@ -14,7 +15,7 @@ namespace RG
 
     TexturePool::Key::operator size_t() const
     {
-        return Utils::hash_val(this);
+        return Hash64(this, sizeof(*this), (size_t)m_pDevice);
     }
 
     void TexturePool::Initialize(GPUDeviceID device)

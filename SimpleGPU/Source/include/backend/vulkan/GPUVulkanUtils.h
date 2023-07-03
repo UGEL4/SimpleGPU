@@ -488,20 +488,6 @@ extern "C" {
         VK_COMPARE_OP_ALWAYS,
     };
 
-    static inline bool FormatUtil_IsDepthStencilFormat(EGPUFormat const fmt)
-    {
-        switch (fmt)
-        {
-            case GPU_FORMAT_D24_UNORM_S8_UINT:
-            case GPU_FORMAT_D32_SFLOAT_S8_UINT:
-            case GPU_FORMAT_D16_UNORM_S8_UINT:
-                return true;
-            default:
-                return false;
-        }
-        return false;
-    }
-
     static VkFormatFeatureFlags VulkanUtil_ImageUsageToFormatFeatures(VkImageUsageFlags usage)
     {
         VkFormatFeatureFlags result = (VkFormatFeatureFlags)0;

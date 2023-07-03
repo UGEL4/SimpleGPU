@@ -23,15 +23,21 @@ protected:
 
 class TextureWriteEdge : public TextureEdge
 {
+    friend class RenderGraph;
+    friend class RenderGraphBackend;
 public:
-    TextureWriteEdge(TextureRTVHandle handle, EGPUResourceState requestedState = EGPUResourceState::GPU_RESOURCE_STATE_RENDER_TARGET);
+    TextureWriteEdge(uint32_t mrtIndex, TextureRTVHandle handle, EGPUResourceState requestedState = EGPUResourceState::GPU_RESOURCE_STATE_RENDER_TARGET);
     ~TextureWriteEdge() { std::cout << "Free TextureWriteEdge: from = " << mFromNode << ", to = " << mToNode << std::endl;}
 
     virtual PassNode* GetPassNode() final;
     virtual TextureNode* GetTextureNode() final;
+    const uint32_t GetMipBase() const { return mTextureHandle.mMipBase; }
+    const uint32_t GetArrayBase() const { return mTextureHandle.mArrayBase; }
+    const uint32_t GetArrayCount() const { return mTextureHandle.mArrayCount; }
 
 private:
     TextureRTVHandle mTextureHandle;
+    uint32_t mMRTIndex;
 };
 
 class TextureReadEdge : public TextureEdge
