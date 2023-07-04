@@ -79,6 +79,7 @@ GPUDeviceID GPUCreateDevice(GPUAdapterID pAdapter, const GPUDeviceDescriptor* pD
     {
         *(const GPUProcTable**)&pDevice->pProcTableCache = pAdapter->pProcTableCache;
     }
+    ((GPUDevice*)pDevice)->nextTextureId = 0;
     return pDevice;
 }
 
@@ -172,6 +173,10 @@ GPUSwapchainID GPUCreateSwapchain(GPUDeviceID pDevice, GPUSwapchainDescriptor* p
 
     GPUSwapchain* pSwapchain = (GPUSwapchain*)pDevice->pProcTableCache->CreateSwapchain(pDevice, pDesc);
     pSwapchain->pDevice      = pDevice;
+    for (uint32_t i = 0; i < pSwapchain->backBuffersCount; i++)
+    {
+        ((GPUTexture*)pSwapchain->ppBackBuffers[i])->uniqueId = ((GPUDevice*)pDevice)->nextTextureId++;
+    }
 
     return pSwapchain;
 }

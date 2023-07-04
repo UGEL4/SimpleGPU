@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdint.h>
 #include <unordered_map>
 #include <deque>
 #include "api.h"
@@ -32,12 +33,15 @@ namespace RG
             EGPUFormat format             = GPU_FORMAT_UNDEFINED;
             uint32_t usages               = 0;
             uint32_t aspectMask           = 0;
+            EGPUTextureDimension dims     = GPU_TEX_DIMENSION_2D;
             uint32_t baseMipLevel         = 0;
             uint32_t mipLevelCount        = 0;
             uint32_t baseArrayLayer       = 0;
             uint32_t arrayLayerCount      = 0;
             uint32_t width                = 0;
             uint32_t heught               = 0;
+            uint64_t uniqueId             = 0;
+
 
             operator size_t() const;
             friend class TextureViewPool;

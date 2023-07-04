@@ -54,6 +54,7 @@ public:
     const uint32_t GetMipCount() const { return mTextureHandle.mMipCount; }
     const uint32_t GetArrayBase() const { return mTextureHandle.mArrayBase; }
     const uint32_t GetArrayCount() const { return mTextureHandle.mArrayCount; }
+    const EGPUTextureDimension GetDimension() const { return mTextureHandle.mDim; }
 
 private:
     uint64_t mNameHash;

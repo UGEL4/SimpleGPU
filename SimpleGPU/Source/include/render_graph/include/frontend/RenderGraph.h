@@ -9,6 +9,8 @@ class PassNode;
 class RenderPassNode;
 class ResourceNode;
 class TextureEdge;
+class PresentPassNode;
+
 class RenderGraph
 {
 public:
@@ -65,6 +67,7 @@ public:
     public:
         TextureBuilder& Import(GPUTextureID texture, EGPUResourceState initedState);
         TextureBuilder& SetName(const char* name);
+        TextureBuilder& AllowRenderTarget();
         //todo: all setters
     private:
         RenderGraph& mGraph;
@@ -72,6 +75,22 @@ public:
     };
     using TextureSetupFunc = std::function<void(RenderGraph&, TextureBuilder&)>;
     TextureHandle CreateTexture(const TextureSetupFunc& setup);
+
+    class PresentPassBuilder
+    {
+    public:
+        friend class RenderGraph;
+        PresentPassBuilder& SetName(const char* name);
+        PresentPassBuilder& Swapchain(GPUSwapchainID swapchain, uint32_t index);
+        PresentPassBuilder& Texture(TextureHandle handle, bool isBackBuffer = true);
+    protected:
+        PresentPassBuilder(RenderGraph& graph, PresentPassNode& node);
+    private:
+        RenderGraph& mGraph;
+        PresentPassNode& mPassNode;
+    };
+    using PresentPassSetupFunc = std::function<void(RenderGraph&, PresentPassBuilder&)>;
+    PassHandle AddPresentPass(const PresentPassSetupFunc& setup);
 
     RenderGraph();
     virtual ~RenderGraph() = default;
@@ -81,9 +100,12 @@ protected:
     struct NodeAndEdgeFactory* m_pNAEFactory = nullptr;
     std::vector<PassNode*> mPasses;
     std::vector<ResourceNode*> mResources;
+    std::vector<PassNode*> mCulledPasses;
+    std::vector<ResourceNode*> mCulledResources;
     uint32_t mFrameIndex = 0;
 };
 
 using RenderGraphBuilder = RenderGraph::RenderGraphBuilder;
 using RenderPassBuilder  = RenderGraph::RenderPassBuilder;
 using TextureBuilder     = RenderGraph::TextureBuilder;
+using PresentPassBuilder = RenderGraph::PresentPassBuilder;

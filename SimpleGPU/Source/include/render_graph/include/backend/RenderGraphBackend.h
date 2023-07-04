@@ -20,10 +20,12 @@ public:
     void Initialize(GPUDeviceID gfxDevice, GPUQueueID gfxQueue);
     void Finalize();
     void ResetOnStart();
+    void Commit(GPUQueueID gfxQueue, uint64_t frameIndex);
 private:
     GPUCommandPoolID m_pCommandPool = nullptr;
     GPUCommandBufferID m_pCmd       = nullptr;
     GPUFenceID m_pFence             = nullptr;
+    uint64_t mExecFrame             = 0;
     std::unordered_map<GPURootSignatureID, BindTablePool*> mBindTablePools;
 };
 
@@ -38,6 +40,7 @@ public:
     virtual void Finalize() override;
 
     void ExecuteRenderPass(RenderPassNode* pass, RenderGraphFrameExecutor& executor);
+    void ExectuePresentPass(PresentPassNode* pass, RenderGraphFrameExecutor& executor);
 
 private:
     void CalculateResourceBarriers(RenderGraphFrameExecutor& executor, PassNode* pass,

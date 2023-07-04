@@ -5,6 +5,7 @@
 #include <fstream>
 #include <filesystem>
 #include "texture.h"
+#include "render_graph/include/frontend/RenderGraph.h"
 
 static int WIDTH = 1080;
 static int HEIGHT = 1080;
@@ -123,7 +124,16 @@ GPUSamplerID CreateTextureSampler(GPUDeviceID device)
     return GPUCreateSampler(device, &desc);
 }
 
+void NormalRenderSimple();
+void RenderGraphSimple();
 int main(int argc, char** argv)
+{
+    //NormalRenderSimple();
+    RenderGraphSimple();
+    return 0;
+}
+
+void NormalRenderSimple()
 {
     //create instance
     GPUInstanceDescriptor desc{
@@ -552,5 +562,203 @@ int main(int argc, char** argv)
     GPUFreeInstance(pInstance);
 
     DestroyWindow(window);
-    return 0;
+}
+
+void RenderGraphSimple()
+{
+    //create instance
+    GPUInstanceDescriptor desc{
+        .pChained         = nullptr,
+        .backend          = EGPUBackend::GPUBackend_Vulkan,
+        .enableDebugLayer = true,
+        .enableValidation = true
+    };
+    GPUInstanceID pInstance = GPUCreateInstance(&desc);
+
+    //enumerate adapters
+    uint32_t adapterCount   = 0;
+    GPUEnumerateAdapters(pInstance, NULL, &adapterCount);
+    DECLEAR_ZERO_VAL(GPUAdapterID, adapters, adapterCount);
+    GPUEnumerateAdapters(pInstance, adapters, &adapterCount);
+
+    //create
+    auto window     = CreateWin32Window();
+    GPUSurfaceID pSurface = GPUCreateSurfaceFromNativeView(pInstance, window);
+
+    //create device
+    GPUQueueGroupDescriptor G = {
+        .queueType  = EGPUQueueType::GPU_QUEUE_TYPE_GRAPHICS,
+        .queueCount = 1
+    };
+    GPUDeviceDescriptor deviceDesc = {
+        .pQueueGroup          = &G,
+        .queueGroupCount      = 1,
+        .disablePipelineCache = false
+    };
+    GPUDeviceID device = GPUCreateDevice(adapters[0], &deviceDesc);
+
+    //greate graphic queue
+    GPUQueueID pGraphicQueue = GPUGetQueue(device, EGPUQueueType::GPU_QUEUE_TYPE_GRAPHICS, 0);
+
+    //create present fence
+    GPUFenceID presenFence = GPUCreateFence(device);
+
+    //create swapchain
+    GPUSwapchainDescriptor swapchainDesc{};
+    swapchainDesc.ppPresentQueues    = &pGraphicQueue;
+    swapchainDesc.presentQueuesCount = 1;
+    swapchainDesc.pSurface           = pSurface;
+    swapchainDesc.format             = EGPUFormat::GPU_FORMAT_B8G8R8A8_UNORM;
+    swapchainDesc.width              = WIDTH;
+    swapchainDesc.height             = HEIGHT;
+    swapchainDesc.imageCount         = 3;
+    swapchainDesc.enableVSync        = true;
+    GPUSwapchainID pSwapchain        = GPUCreateSwapchain(device, &swapchainDesc);
+
+    //render resources
+   /*  GPUSamplerID texture_sampler              = CreateTextureSampler(device);
+    GPUTextureID texture                      = CreateTexture(device, pGraphicQueue);
+    GPUTextureViewID textureView              = CreateTextureView(texture);
+    const char8_t* sampler_name               = u8"texSamp"; */
+
+    // start create renderpipeline
+    //shader
+    uint32_t* vShaderCode;
+    uint32_t vSize = 0;
+    ReadShaderBytes(u8"traingle_vertex_shader.vert", &vShaderCode, &vSize, EGPUBackend::GPUBackend_Vulkan);
+    uint32_t* fShaderCode;
+    uint32_t fSize = 0;
+    ReadShaderBytes(u8"traingle_fragment_shader.frag", &fShaderCode, &fSize, EGPUBackend::GPUBackend_Vulkan);
+    GPUShaderLibraryDescriptor vShaderDesc{};
+    vShaderDesc.pName    = u8"vertex_shader";
+    vShaderDesc.code = vShaderCode;
+    vShaderDesc.codeSize = vSize;
+    vShaderDesc.stage    = GPU_SHADER_STAGE_VERT;
+    GPUShaderLibraryDescriptor fShaderDesc{};
+    fShaderDesc.pName    = u8"fragment_shader";
+    fShaderDesc.code     = fShaderCode;
+    fShaderDesc.codeSize = fSize;
+    fShaderDesc.stage    = GPU_SHADER_STAGE_FRAG;
+    GPUShaderLibraryID pVShader = GPUCreateShaderLibrary(device, &vShaderDesc);
+    GPUShaderLibraryID pFShader = GPUCreateShaderLibrary(device, &fShaderDesc);
+    free(vShaderCode);
+    free(fShaderCode);
+    GPUShaderEntryDescriptor shaderEntries[2] = {0};
+    shaderEntries[0].stage                    = GPU_SHADER_STAGE_VERT;
+    shaderEntries[0].entry                    = u8"main";
+    shaderEntries[0].pLibrary                 = pVShader;
+    shaderEntries[1].stage                    = GPU_SHADER_STAGE_FRAG;
+    shaderEntries[1].entry                    = u8"main";
+    shaderEntries[1].pLibrary                 = pFShader;
+
+    //create root signature
+    GPURootSignatureDescriptor rootRSDesc = {};
+    rootRSDesc.shaders                    = shaderEntries;
+    rootRSDesc.shader_count               = 2;
+    GPURootSignatureID pRS                = GPUCreateRootSignature(device, &rootRSDesc);
+
+    //vertex layout
+    GPUVertexLayout vertexLayout{};
+    // renderpipeline
+    GPURenderPipelineDescriptor pipelineDesc{};
+    pipelineDesc.pRootSignature    = pRS;
+    pipelineDesc.pVertexShader     = &shaderEntries[0];
+    pipelineDesc.pFragmentShader   = &shaderEntries[1];
+    pipelineDesc.pVertexLayout     = &vertexLayout;
+    pipelineDesc.primitiveTopology = GPU_PRIM_TOPO_TRI_LIST;
+    EGPUFormat f                   = (EGPUFormat)pSwapchain->ppBackBuffers[0]->format;
+    pipelineDesc.pColorFormats     = &f;
+    pipelineDesc.renderTargetCount = 1;
+    GPURenderPipelineID pipeline   = GPUCreateRenderPipeline(device, &pipelineDesc);
+    GPUFreeShaderLibrary(pVShader);
+    GPUFreeShaderLibrary(pFShader);
+    // end create renderpipeline
+
+    RenderGraph* pGraph = RenderGraph::Create([=](RenderGraphBuilder& builder)
+    {
+        builder.WithDevice(device).WithGFXQueue(pGraphicQueue);
+    });
+    //render loop begin
+    uint32_t backbufferIndex = 0;
+    bool exit = false;
+    MSG msg{};
+    while (!exit)
+    {
+        if (PeekMessage(&msg, nullptr, 0, 0,  PM_REMOVE))
+        {
+            if (msg.message == WM_QUIT)
+            {
+                exit = true;
+            }
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+        else
+        {
+            
+            GPUWaitFences(&presenFence, 1);
+            GPUAcquireNextDescriptor acq_desc{};
+            acq_desc.fence          = presenFence;
+            backbufferIndex         = GPUAcquireNextImage(pSwapchain, &acq_desc);
+            GPUTextureID backbuffer = pSwapchain->ppBackBuffers[backbufferIndex];
+            auto backbufferHandle = pGraph->CreateTexture([=](RenderGraph& g, TextureBuilder& builder)
+            {
+                builder.SetName("backbuffer")
+                .Import(backbuffer, GPU_RESOURCE_STATE_UNDEFINED)
+                .AllowRenderTarget();
+            });
+
+            pGraph->AddRenderPass(
+                [=](RenderGraph& g, RenderPassBuilder& builder)
+                {
+                    builder.SetPipeline(pipeline)
+                    .SetName("render pass")
+                    .Write(0, backbufferHandle, EGPULoadAction::GPU_LOAD_ACTION_CLEAR, EGPUStoreAction::GPU_STORE_ACTION_STORE);
+                },
+                [=](RenderGraph& g, RenderPassContext& context)
+                {
+                    GPURenderEncoderSetViewport(context.m_pEncoder, 0.f, 0, (float)backbuffer->width,
+                                                (float)backbuffer->height, 0.f, 1.f);
+                    GPURenderEncoderSetScissor(context.m_pEncoder, 0, 0, backbuffer->width,
+                                               backbuffer->height);
+                    GPURenderEncoderDraw(context.m_pEncoder, 3, 0);
+                }
+            );
+
+            pGraph->AddPresentPass(
+                [=](RenderGraph& g, PresentPassBuilder& builder)
+                {
+                    builder.SetName("present pass")
+                    .Swapchain(pSwapchain, backbufferIndex)
+                    .Texture(backbufferHandle, true);
+                }
+            );
+
+            pGraph->Compile();
+            uint64_t frame_idx = pGraph->Execute();
+            (void)frame_idx;
+
+            // present
+            GPUWaitQueueIdle(pGraphicQueue);
+            GPUQueuePresentDescriptor presentDesc{};
+            presentDesc.swapchain            = pSwapchain;
+            presentDesc.index                = backbufferIndex;
+            GPUQueuePresent(pGraphicQueue, &presentDesc);
+        }
+    }
+    //render loop end
+    RenderGraph::Destroy(pGraph);
+
+    GPUWaitQueueIdle(pGraphicQueue);
+    GPUWaitFences(&presenFence, 1);
+    GPUFreeFence(presenFence);
+    GPUFreeRenderPipeline(pipeline);
+    GPUFreeRootSignature(pRS);
+    GPUFreeSwapchain(pSwapchain);
+    GPUFreeQueue(pGraphicQueue);
+    GPUFreeDevice(device);
+    GPUFreeSurface(pInstance, pSurface);
+    GPUFreeInstance(pInstance);
+
+    DestroyWindow(window);
 }

@@ -1378,22 +1378,22 @@ GPUTextureID GPUCreateTexture_Vulkan(GPUDeviceID device, const GPUTextureDescrip
     assert(T);
     T->super.ownsImage   = owns_image;
     T->super.aspectMask  = aspect_mask;
-    T->super.isDedicated  = is_dedicated;
+    T->super.isDedicated = is_dedicated;
     T->super.isAliasing  = desc->is_aliasing;
     T->super.canAlias    = can_alias_alloc || desc->is_aliasing;
-    T->pVkImage           = pVkImage;
+    T->pVkImage          = pVkImage;
     if (pVkDeviceMemory) T->pVkDeviceMemory = pVkDeviceMemory;
     if (vmaAllocation) T->pVkAllocation = vmaAllocation;
-    T->super.sampleCount         = desc->sample_count;
-    T->super.width                = desc->width;
-    T->super.height               = desc->height;
-    T->super.depth                = desc->depth;
-    T->super.mipLevels           = desc->mip_levels;
-    T->super.isCube              = cubemapRequired;
+    T->super.sampleCount       = desc->sample_count;
+    T->super.width             = desc->width;
+    T->super.height            = desc->height;
+    T->super.depth             = desc->depth;
+    T->super.mipLevels         = desc->mip_levels;
+    T->super.isCube            = cubemapRequired;
     T->super.arraySizeMinusOne = arraySize - 1;
-    T->super.format               = desc->format;
-    T->super.isImported          = is_imported;
-    //T->super.uniqueId            = (unique_id == UINT64_MAX) ? D->spuer.nextTextureId++ : unique_id;
+    T->super.format            = desc->format;
+    T->super.isImported        = is_imported;
+    T->super.uniqueId          = (unique_id == UINT64_MAX) ? D->spuer.nextTextureId++ : unique_id;
     // Set Texture Name
     //VkUtil_OptionalSetObjectName(D, (uint64_t)T->pVkImage, VK_OBJECT_TYPE_IMAGE, desc->name);
     // Start state
@@ -2566,8 +2566,8 @@ void GPUCmdTransferBufferToTexture_Vulkan(GPUCommandBufferID cmd, const struct G
 
         VkBufferImageCopy copy = {};
         copy.bufferOffset                    = desc->src_offset;
-        copy.bufferRowLength                 = xBlocksCount * 1;// ָ���������ڴ��еĲ��ַ�ʽ, ָ��0��ʾ���ؽ��ܴ��
-        copy.bufferImageHeight               = yBlocksCount * 1;// ָ���������ڴ��еĲ��ַ�ʽ, ָ��0��ʾ���ؽ��ܴ��
+        copy.bufferRowLength                 = xBlocksCount * 1;//指定像素在内存中的布局方式, 指定0表示像素紧密打包, 和imageExtent.width相等
+        copy.bufferImageHeight               = yBlocksCount * 1;//指定像素在内存中的布局方式, 指定0表示像素紧密打包，和imageExtent.height相等
         copy.imageSubresource.aspectMask     = (VkImageAspectFlags)desc->dst->aspectMask;
         copy.imageSubresource.mipLevel       = desc->dst_subresource.mip_level;
         copy.imageSubresource.baseArrayLayer = desc->dst_subresource.base_array_layer;

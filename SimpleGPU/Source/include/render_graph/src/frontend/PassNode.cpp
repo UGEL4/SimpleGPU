@@ -40,7 +40,7 @@ std::span<TextureWriteEdge*> PassNode::GetTextureWriteEdges()
 }
 
 PassNode::PassNode(EPassType type, uint32_t order)
-: RenderGraphNode(EObjectType::Pass), mOrder(order), mCanBeLone(false)
+: RenderGraphNode(EObjectType::Pass), mOrder(order), mPassType(type), mCanBeLone(false)
 {
 
 }
@@ -48,6 +48,13 @@ PassNode::PassNode(EPassType type, uint32_t order)
 /////////////////////////////////////RenderPassNode
 RenderPassNode::RenderPassNode(uint32_t order)
 : PassNode(EPassType::Render, order)
+{
+
+}
+
+/////////////////////////////////////PresentPassNode
+PresentPassNode::PresentPassNode(uint32_t order)
+: PassNode(EPassType::Present, order)
 {
 
 }

@@ -37,7 +37,7 @@ struct NodeAndEdgeFactoryImp : public NodeAndEdgeFactory
             while (blocks.try_dequeue(block))
                 free(block);
         }
-        void* allocate()
+        void* Allocate()
         {
             void* block;
             if (blocks.try_dequeue(block))
@@ -46,7 +46,7 @@ struct NodeAndEdgeFactoryImp : public NodeAndEdgeFactory
                 return calloc(1, blockSize);
             }
         }
-        void free(void* block)
+        void Free(void* block)
         {
             if (blocks.try_enqueue(block))
                 return;
@@ -58,7 +58,7 @@ struct NodeAndEdgeFactoryImp : public NodeAndEdgeFactory
     {
         auto pool = pools.find(size);
         assert(pool != pools.end());
-        pool->second->free(memory);
+        pool->second->Free(memory);
         return true;
     }
 
@@ -76,7 +76,7 @@ struct NodeAndEdgeFactoryImp : public NodeAndEdgeFactory
         {
             p = pool->second;
         }
-        return p->allocate();
+        return p->Allocate();
     }
     std::unordered_map<size_t, factory_pool_t*> pools;
 };

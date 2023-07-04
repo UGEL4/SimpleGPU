@@ -37,7 +37,7 @@ struct NodeAndEdgeFactory
     template<typename T>
     T* InternalAlloc()
     {
-        return (T*)internalAllocateMemory(sizeof(T));
+        return (T*)InternalAllocateMemory(sizeof(T));
     }
     
     template<typename T>
@@ -46,7 +46,7 @@ struct NodeAndEdgeFactory
         if (object->pooled_size)
         {
             object->~T();
-            return internalFreeMemory(object, object->pooled_size);
+            return InternalFreeMemory(object, object->pooled_size);
         }
         if (object)
         {

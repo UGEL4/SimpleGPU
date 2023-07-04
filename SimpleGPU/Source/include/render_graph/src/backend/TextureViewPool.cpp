@@ -13,9 +13,9 @@ namespace RG
     }
 
     TextureViewPool::Key::Key(GPUDeviceID device, const GPUTextureViewDescriptor& desc)
-    : m_pDevice(device), m_pTexture(desc.pTexture), format(desc.format), usages(desc.usages), aspectMask(desc.aspectMask)
+    : m_pDevice(device), m_pTexture(desc.pTexture), format(desc.format), usages(desc.usages), aspectMask(desc.aspectMask), dims(desc.dims)
     , baseMipLevel(desc.baseMipLevel), mipLevelCount(desc.mipLevelCount), baseArrayLayer(desc.baseArrayLayer), arrayLayerCount(desc.arrayLayerCount)
-    , width(desc.pTexture->width), heught(desc.pTexture->height)
+    , width(desc.pTexture->width), heught(desc.pTexture->height), uniqueId(desc.pTexture->uniqueId)
     {
 
     }

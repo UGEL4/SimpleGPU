@@ -719,6 +719,7 @@ extern "C" {
 	{
         const GPUAdapterID pAdapter;
         const GPUProcTable* pProcTableCache;
+        uint64_t nextTextureId;
 	} GPUDevice;
 
 	typedef struct GPUQueue
@@ -878,6 +879,7 @@ extern "C" {
     {
         GPUTextureID pTexture;
         EGPUFormat format;
+        EGPUTextureDimension dims;
         uint32_t usages;
         uint32_t aspectMask;
         uint32_t baseMipLevel;

@@ -2,6 +2,7 @@
 #include "render_graph/include/frontend/PassNode.hpp"
 #include "render_graph/include/frontend/ResourceEdge.hpp"
 #include "render_graph/include/frontend/ResourceNode.hpp"
+#include "render_graph/include/frontend/NodeAndEdgeFactory.hpp"
 #include "Utils.h"
 #include <iostream>
 #include <stdint.h>
@@ -46,6 +47,17 @@ void RenderGraphFrameExecutor::ResetOnStart()
     }
     GPUResetCommandPool(m_pCommandPool);
 }
+
+void RenderGraphFrameExecutor::Commit(GPUQueueID gfxQueue, uint64_t frameIndex)
+{
+    // submit
+    GPUQueueSubmitDescriptor submitDesc{};
+    submitDesc.cmds         = &m_pCmd;
+    submitDesc.cmds_count   = 1;
+    submitDesc.signal_fence = m_pFence;
+    GPUSubmitQueue(gfxQueue, &submitDesc);
+    mExecFrame = frameIndex;
+}
 //////////////////RenderGraphFrameExecutor////////////////////////
 
 //////////////////RenderGraphBackend////////////////////////
@@ -68,16 +80,36 @@ uint64_t RenderGraphBackend::Execute()
     {
         for (auto& pass : mPasses)
         {
-            if (pass->type == EObjectType::Pass)
+            if (pass->mPassType == EPassType::Render)
             {
                 ExecuteRenderPass(static_cast<RenderPassNode*>(pass), executor);
+            }
+            if (pass->mPassType == EPassType::Present)
+            {
+                ExectuePresentPass(static_cast<PresentPassNode*>(pass), executor);
             }
         }
     }
     GPUCmdEnd(executor.m_pCmd);
+    {
+        //submit
+        executor.Commit(m_pQueue, frameIndex);
+    }
 
     //clear
     {
+        for (auto pass : mCulledPasses)
+        {
+            m_pNAEFactory->Dealloc(pass);
+        }
+        mCulledPasses.clear();
+
+        for (auto res : mCulledPasses)
+        {
+            m_pNAEFactory->Dealloc(res);
+        }
+        mCulledResources.clear();
+
         //pass
         for (auto pass : mPasses)
         {
@@ -85,9 +117,9 @@ uint64_t RenderGraphBackend::Execute()
             {
                 pass->ForEachTextures([this](TextureNode* texture, TextureEdge* edge)
                 {
-                    if (edge) delete edge;
+                    m_pNAEFactory->Dealloc(edge);
                 });
-                delete pass;
+                m_pNAEFactory->Dealloc(pass);
             }
         }
         mPasses.clear();
@@ -97,7 +129,7 @@ uint64_t RenderGraphBackend::Execute()
         {
             if (res)
             {
-                delete res;
+                m_pNAEFactory->Dealloc(res);
             }
         }
         mResources.clear();
@@ -172,6 +204,7 @@ void RenderGraphBackend::ExecuteRenderPass(RenderPassNode* pass,  RenderGraphFra
                 desc.mipLevelCount   = 1;
                 desc.baseArrayLayer  = edge->GetArrayBase();
                 desc.arrayLayerCount = edge->GetArrayCount();
+                desc.dims            = GPU_TEX_DIMENSION_2D;
 
                 ds_attachment.view                 = mTextureViewPool.Allocate(desc, mFrameIndex);
                 ds_attachment.depth_load_action    = pass->mDepthLoadAction;
@@ -192,6 +225,7 @@ void RenderGraphBackend::ExecuteRenderPass(RenderPassNode* pass,  RenderGraphFra
                 desc.mipLevelCount   = 1;
                 desc.baseArrayLayer  = edge->GetArrayBase();
                 desc.arrayLayerCount = edge->GetArrayCount();
+                desc.dims            = GPU_TEX_DIMENSION_2D;
 
                 GPUColorAttachment colorAttachment{};
                 colorAttachment.view         = mTextureViewPool.Allocate(desc, mFrameIndex);
@@ -220,11 +254,25 @@ void RenderGraphBackend::ExecuteRenderPass(RenderPassNode* pass,  RenderGraphFra
     DeallocaResources(pass);
 }
 
+void RenderGraphBackend::ExectuePresentPass(PresentPassNode* pass, RenderGraphFrameExecutor& executor)
+{
+    auto edges = pass->GetTextureReadEdges();
+    auto&& edge = edges[0];
+    GPUTextureBarrier present_barrier{};
+    present_barrier.texture   = pass->mDesc.swapchain->ppBackBuffers[pass->mDesc.index];
+    present_barrier.src_state = GetLastestState(edge->GetTextureNode(), pass);
+    present_barrier.dst_state = GPU_RESOURCE_STATE_PRESENT;
+    GPUResourceBarrierDescriptor barrier_desc{};
+    barrier_desc.texture_barriers_count = 1;
+    barrier_desc.texture_barriers       = &present_barrier;
+    GPUCmdResourceBarrier(executor.m_pCmd, &barrier_desc);
+}
+
 void RenderGraphBackend::CalculateResourceBarriers(RenderGraphFrameExecutor& executor, PassNode* pass,
         std::vector<GPUTextureBarrier>& tex_barriers, std::vector<std::pair<TextureHandle, GPUTextureID>>& resolved_textures)
 {
-    tex_barriers.resize(pass->GetTextureCount());
-    resolved_textures.resize(pass->GetTextureCount());
+    tex_barriers.reserve(pass->GetTextureCount());
+    resolved_textures.reserve(pass->GetTextureCount());
     //遍历pass的每一个texture资源
     pass->ForEachTextures([&](TextureNode* tex, TextureEdge* edge)
     {
@@ -303,9 +351,9 @@ GPUBindTableID RenderGraphBackend::AllocateAndUpdatePassBindTable(RenderGraphFra
         is_depth_only ? GPU_TVA_DEPTH : GPU_TVA_DEPTH | GPU_TVA_STENCIL :
         GPU_TVA_COLOR;
         view_desc.usages = GPU_TVU_SRV;
-        // view_desc.dims = read_edge->get_dimension();
-        SRVs[i]         = mTextureViewPool.Allocate(view_desc, mFrameIndex);
-        update.textures = &SRVs[i];
+        view_desc.dims   = readEdge->GetDimension();
+        SRVs[i]          = mTextureViewPool.Allocate(view_desc, mFrameIndex);
+        update.textures  = &SRVs[i];
         desc_set_updates.emplace_back(update);
     }
 

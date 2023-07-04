@@ -11,6 +11,10 @@ public:
     virtual Node* AccessNode(dep_graph_handle_t handle) override;
     virtual Node* NodeAt(dep_graph_handle_t id) final;
     virtual bool Clear() final;
+    virtual uint32_t InComingEdges(const Node* node) const final;
+    virtual uint32_t OutGoingEdges(const Node* node) const final;
+    virtual uint32_t InComingEdges(dep_graph_handle_t handle) const final;
+    virtual uint32_t OutGoingEdges(dep_graph_handle_t handle) const final;
     virtual uint32_t ForeachIncomingEdges(Node* node, const std::function<void(Node* from, Node* to, Edge* edge)>& func) final;
     virtual uint32_t ForeachIncomingEdges(dep_graph_handle_t handle, const std::function<void(Node* from, Node* to, Edge* edge)>& func) final;
     virtual uint32_t ForeachOutgoingEdges(Node* node, const std::function<void(Node* from, Node* to, Edge* edge)>& func) final;
@@ -62,6 +66,38 @@ bool DependencyGraphImp::Clear()
 {
     BoostGraph::Graph<DependencyGraph::Node*, DependencyGraph::Edge*>::clear();
     return true;
+}
+
+uint32_t DependencyGraphImp::InComingEdges(const Node* node) const
+{
+    return InComingEdges(node->mId);
+}
+
+uint32_t DependencyGraphImp::OutGoingEdges(const Node* node) const
+{
+    return OutGoingEdges(node->mId);
+}
+
+uint32_t DependencyGraphImp::InComingEdges(dep_graph_handle_t handle) const
+{
+    uint32_t count = 0;
+    auto iedges = boost::in_edges((vertex_descriptor)handle, *this);
+    for (auto iter = iedges.first; iter != iedges.second; ++iter)
+    {
+        count++;
+    }
+    return count;
+}
+
+uint32_t DependencyGraphImp::OutGoingEdges(dep_graph_handle_t handle) const
+{
+    uint32_t count = 0;
+    auto oedges = boost::out_edges((vertex_descriptor)handle, *this);
+    for (auto iter = oedges.first; iter != oedges.second; ++iter)
+    {
+        count++;
+    }
+    return count;
 }
 
 uint32_t DependencyGraphImp::ForeachIncomingEdges(Node* node, const std::function<void(Node* from, Node* to, Edge* edge)>& func)
@@ -159,5 +195,15 @@ uint32_t DependencyGraphNode::ForeachNeighbors(const std::function<void(Dependen
 uint32_t DependencyGraphNode::ForeachNeighbors(const std::function<void(const DependencyGraphNode* neighbor)>& func) const
 {
     return m_pGraph->ForeachNeighbors(this, func);
+}
+
+uint32_t DependencyGraphNode::InComingEdges() const
+{
+    return m_pGraph->InComingEdges(this);
+}
+
+uint32_t DependencyGraphNode::OutGoingEdges() const
+{
+    return m_pGraph->OutGoingEdges(this);
 }
 /////////////////////////////////////DependencyGraphNode///////////////////////////////////////////

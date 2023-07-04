@@ -5,6 +5,8 @@
 #include "render_graph/include/frontend/ResourceEdge.hpp"
 #include "render_graph/include/frontend/NodeAndEdgeFactory.hpp"
 #include <iostream>
+#include <assert.h>
+#include <stdint.h>
 
 ///////////RenderGraphBuilder//////////////////
 RenderGraph::RenderGraphBuilder& RenderGraph::RenderGraphBuilder::WithDevice(GPUDeviceID device)
@@ -45,6 +47,25 @@ void RenderGraph::Destroy(RenderGraph* graph)
 void RenderGraph::Compile()
 {
     std::cout << "RenderGraph::Compile()" << std::endl;
+    mPasses.erase(
+        std::remove_if(mPasses.begin(), mPasses.end(), [this](PassNode* pass)
+        {
+            bool lone = !(pass->InComingEdges() + pass->OutGoingEdges());
+            if (lone && !pass->mCanBeLone) mCulledPasses.emplace_back(pass);
+            return lone;
+        }),
+        mPasses.end()
+    );
+
+    mResources.erase(
+        std::remove_if(mResources.begin(), mResources.end(), [this](ResourceNode* node)
+        {
+            bool lone = !(node->InComingEdges() + node->OutGoingEdges());
+            if (lone) mCulledResources.emplace_back(node);
+            return lone;
+        }),
+        mResources.end()
+    );
 }
 
 uint64_t RenderGraph::Execute()
@@ -143,7 +164,7 @@ RenderGraph::RenderPassBuilder& RenderGraph::RenderPassBuilder::SetName(const ch
 RenderGraph::RenderPassBuilder& RenderGraph::RenderPassBuilder::Write(uint32_t mrtIndex, TextureRTVHandle handle, EGPULoadAction load, EGPUStoreAction store)
 {
     //链接pass_node 和 resource_node
-    TextureWriteEdge* edge = new TextureWriteEdge(mrtIndex, handle);
+    TextureWriteEdge* edge = mGraph.m_pNAEFactory->Allocate<TextureWriteEdge>(mrtIndex, handle);
     mPassNode.mOutTextureEdges.emplace_back(edge);
     mGraph.m_pGraph->Link(&mPassNode, mGraph.m_pGraph->AccessNode(handle.mThis), edge);
     mPassNode.mLoadActions[mrtIndex]  = load;
@@ -153,7 +174,7 @@ RenderGraph::RenderPassBuilder& RenderGraph::RenderPassBuilder::Write(uint32_t m
 
 RenderGraph::RenderPassBuilder& RenderGraph::RenderPassBuilder::Read(const char* name, TextureSRVHandle handle)
 {
-    TextureReadEdge* edge = new TextureReadEdge(name, handle);
+    TextureReadEdge* edge = mGraph.m_pNAEFactory->Allocate<TextureReadEdge>(name, handle);
     mPassNode.mInTextureEdges.emplace_back(edge);
     mGraph.m_pGraph->Link(mGraph.m_pGraph->AccessNode(handle.mThis), &mPassNode, edge);
     return *this;
@@ -176,7 +197,7 @@ RenderGraph::RenderPassBuilder& RenderGraph::RenderPassBuilder::SetDepthStencil(
                                                                                 EGPULoadAction depthLoad, EGPUStoreAction depthStore,
                                                                                 EGPULoadAction stencilLoad, EGPUStoreAction stencilStore)
 {
-    TextureWriteEdge* edge = new TextureWriteEdge(GPU_MAX_MRT_COUNT, handle, GPU_RESOURCE_STATE_DEPTH_WRITE);
+    TextureWriteEdge* edge = mGraph.m_pNAEFactory->Allocate<TextureWriteEdge>(GPU_MAX_MRT_COUNT, handle, GPU_RESOURCE_STATE_DEPTH_WRITE);
     mPassNode.mOutTextureEdges.emplace_back(edge);
     mGraph.m_pGraph->Link(&mPassNode, mGraph.m_pGraph->AccessNode(handle.mThis), edge);
     mPassNode.mDepthLoadAction    = depthLoad;
@@ -189,8 +210,8 @@ RenderGraph::RenderPassBuilder& RenderGraph::RenderPassBuilder::SetDepthStencil(
 
 PassHandle RenderGraph::AddRenderPass(const RenderPassSetupFunc& setup, const RenderPassExecuteFunction& execute)
 {
-    uint32_t order = (uint32_t)mPasses.size();
-    RenderPassNode* newPass = new RenderPassNode(order);
+    uint32_t order          = (uint32_t)mPasses.size();
+    RenderPassNode* newPass = m_pNAEFactory->Allocate<RenderPassNode>(order);
     mPasses.emplace_back(newPass);
     m_pGraph->Insert(newPass);
     newPass->mExecuteFunc = execute;
@@ -230,9 +251,16 @@ RenderGraph::TextureBuilder& RenderGraph::TextureBuilder::SetName(const char* na
     return *this;
 }
 
+RenderGraph::TextureBuilder& RenderGraph::TextureBuilder::AllowRenderTarget()
+{
+    mTextureNode.mDesc.descriptors |= GPU_RESOURCE_TYPE_RENDER_TARGET;
+    mTextureNode.mDesc.start_state = GPU_RESOURCE_STATE_UNDEFINED;
+    return *this;
+}
+
 TextureHandle RenderGraph::CreateTexture(const TextureSetupFunc& setup)
 {
-    auto newTex = new TextureNode();
+    auto newTex = m_pNAEFactory->Allocate<TextureNode>();
     mResources.emplace_back(newTex);
     m_pGraph->Insert(newTex);
 
@@ -241,6 +269,49 @@ TextureHandle RenderGraph::CreateTexture(const TextureSetupFunc& setup)
     return newTex->GetHandle();
 }
 ///////////TextureBuilder//////////////////
+
+///////////PresentPassBuilder//////////////////
+RenderGraph::PresentPassBuilder& RenderGraph::PresentPassBuilder::SetName(const char* name)
+{
+    mPassNode.SetName(name);
+    return *this;
+}
+
+RenderGraph::PresentPassBuilder& RenderGraph::PresentPassBuilder::Swapchain(GPUSwapchainID swapchain, uint32_t index)
+{
+    mPassNode.mDesc.swapchain = swapchain;
+    mPassNode.mDesc.index     = index;
+    return *this;
+}
+
+RenderGraph::PresentPassBuilder& RenderGraph::PresentPassBuilder::Texture(TextureHandle handle, bool isBackBuffer)
+{
+    assert(isBackBuffer);
+    TextureReadEdge* edge = mGraph.m_pNAEFactory->Allocate<TextureReadEdge>("PresentSrc", handle, GPU_RESOURCE_STATE_PRESENT);
+    mPassNode.mInTextureEdges.emplace_back(edge);
+    mGraph.m_pGraph->Link(mGraph.m_pGraph->AccessNode(handle), &mPassNode, edge);
+    return *this;
+}
+
+RenderGraph::PresentPassBuilder::PresentPassBuilder(RenderGraph& graph, PresentPassNode& node)
+: mGraph(graph), mPassNode(node)
+{
+
+}
+
+PassHandle RenderGraph::AddPresentPass(const PresentPassSetupFunc& setup)
+{
+    uint32_t size = (uint32_t)mPasses.size();
+    PresentPassNode* node = m_pNAEFactory->Allocate<PresentPassNode>(size);
+    mPasses.emplace_back(node);
+    m_pGraph->Insert(node);
+
+    PresentPassBuilder builder(*this, *node);
+    setup(*this, builder);
+    return node->GetHandle();
+}
+
+///////////PresentPassBuilder//////////////////
 
 RenderGraph::RenderGraph()
 {

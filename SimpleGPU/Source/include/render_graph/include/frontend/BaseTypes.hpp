@@ -5,7 +5,7 @@
 #include <string>
 #include <functional>
 
-typedef uint64_t handle_t;
+typedef uint64_t _handle_t;
 enum class EObjectType : uint8_t
 {
     Pass,
@@ -38,12 +38,12 @@ enum class ERelationshipType : uint8_t
 template <EObjectType type>
 struct ObjectHandle
 {
-    ObjectHandle(handle_t handle) : mHandle(handle){}
+    ObjectHandle(_handle_t handle) : mHandle(handle){}
 
-    inline operator handle_t() const { return mHandle; }
+    inline operator _handle_t() const { return mHandle; }
 
 private:
-    handle_t mHandle;
+    _handle_t mHandle;
 };
 
 using PassHandle = ObjectHandle<EObjectType::Pass>;
@@ -56,7 +56,7 @@ struct ObjectHandle<EObjectType::Texture>
         friend struct ObjectHandle<EObjectType::Texture>;
         friend class RenderGraph;
         friend class TextureWriteEdge;
-        ShaderWriteHandle(const handle_t _this) : mThis(_this) {}
+        ShaderWriteHandle(const _handle_t _this) : mThis(_this) {}
         inline operator ObjectHandle<EObjectType::Texture>() const { return ObjectHandle<EObjectType::Texture>(mThis); }
         ShaderWriteHandle WriteMip(uint32_t level) const
         {
@@ -72,7 +72,7 @@ struct ObjectHandle<EObjectType::Texture>
             return handle;
         }
     private:
-        handle_t mThis;
+        _handle_t mThis;
         uint32_t mMipBase     = 0;
         uint32_t mArrayBase   = 0;
         uint32_t mArrayCount  = 1;
@@ -84,7 +84,7 @@ struct ObjectHandle<EObjectType::Texture>
         friend struct ObjectHandle<EObjectType::Texture>;
         friend class RenderGraph;
         friend class TextureWriteEdge;
-        DepthStencilHandle(const handle_t _this) : ShaderWriteHandle(_this) {}
+        DepthStencilHandle(const _handle_t _this) : ShaderWriteHandle(_this) {}
         DepthStencilHandle ClearDepth(float depth) const
         {
             DepthStencilHandle handle = *this;
@@ -101,32 +101,54 @@ struct ObjectHandle<EObjectType::Texture>
         friend struct ObjectHandle<EObjectType::Texture>;
         friend class RenderGraph;
         friend class TextureReadEdge;
-        ShaderReadHandle(const handle_t _this, uint32_t mipBase = 0, uint32_t mipCount = 1, uint32_t arrayBase = 0, uint32_t arrayCount = 1)
+        ShaderReadHandle(const _handle_t _this, uint32_t mipBase = 0, uint32_t mipCount = 1, uint32_t arrayBase = 0, uint32_t arrayCount = 1)
         : mThis(_this), mMipBase(mipBase), mMipCount(mipCount), mArrayBase(arrayBase), mArrayCount(arrayCount)
         {
 
         }
         inline operator ObjectHandle<EObjectType::Texture>() const { return ObjectHandle<EObjectType::Texture>(mThis); }
+        ShaderReadHandle ReadMip(uint32_t base, uint32_t count) const
+        {
+            ShaderReadHandle handle = *this;
+            handle.mMipBase         = base;
+            handle.mMipCount        = count;
+            return handle;
+        }
+
+        ShaderReadHandle ReadArray(uint32_t base, uint32_t count) const
+        {
+            ShaderReadHandle handle = *this;
+            handle.mArrayBase       = base;
+            handle.mArrayCount      = count;
+            return handle;
+        }
+
+        ShaderReadHandle ReadDimension(EGPUTextureDimension dim) const
+        {
+            ShaderReadHandle handle = *this;
+            handle.mDim              = dim;
+            return handle;
+        }
     private:
-        handle_t mThis;
+        _handle_t mThis;
         uint32_t mMipBase        = 0;
         uint32_t mMipCount       = 1;
         uint32_t mArrayBase      = 0;
         uint32_t mArrayCount     = 1;
-        EGPUTextureDimension dim = GPU_TEX_DIMENSION_2D;
+        EGPUTextureDimension mDim = GPU_TEX_DIMENSION_2D;
     };
     inline operator ShaderReadHandle() const { return ShaderReadHandle(mHandle); }
 
-    inline operator handle_t() const { return mHandle; }
+    inline operator _handle_t() const { return mHandle; }
     ObjectHandle() {}
 
     friend class TextureNode;
     friend class RenderGraph;
     friend class TextureRenderEdge;
 protected:
-    ObjectHandle(handle_t handle) : mHandle(handle){}
+    ObjectHandle(_handle_t handle) : mHandle(handle){}
 private:
-    handle_t mHandle;
+    _handle_t mHandle;
 };
 using TextureHandle    = ObjectHandle<EObjectType::Texture>;
 using TextureRTVHandle = TextureHandle::ShaderWriteHandle;
