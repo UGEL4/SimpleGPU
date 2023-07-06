@@ -616,10 +616,49 @@ void RenderGraphSimple()
     GPUSwapchainID pSwapchain        = GPUCreateSwapchain(device, &swapchainDesc);
 
     //render resources
-   /*  GPUSamplerID texture_sampler              = CreateTextureSampler(device);
+    GPUSamplerID texture_sampler              = CreateTextureSampler(device);
     GPUTextureID texture                      = CreateTexture(device, pGraphicQueue);
     GPUTextureViewID textureView              = CreateTextureView(texture);
-    const char8_t* sampler_name               = u8"texSamp"; */
+    const char8_t* sampler_name               = u8"texSamp";
+    GPUCommandPoolID copy_pool = GPUCreateCommandPool(pGraphicQueue);
+    GPUCommandBufferDescriptor copy_cmd_desc{};
+    copy_cmd_desc.isSecondary = false;
+    GPUCommandBufferID copy_cmd = GPUCreateCommandBuffer(copy_pool, &copy_cmd_desc);
+    // start upload resources
+    GPUBufferDescriptor upload_buffer{};
+    upload_buffer.size         = sizeof(TEXTURE_DATA);
+    upload_buffer.flags        = GPU_BCF_OWN_MEMORY_BIT | GPU_BCF_PERSISTENT_MAP_BIT;
+    upload_buffer.descriptors  = GPU_RESOURCE_TYPE_NONE;
+    upload_buffer.memory_usage = GPU_MEM_USAGE_CPU_ONLY;
+    GPUBufferID uploadBuffer   = GPUCreateBuffer(device, &upload_buffer);
+    //copy texture
+    memcpy(uploadBuffer->cpu_mapped_address, TEXTURE_DATA, sizeof(TEXTURE_DATA));
+    GPUResetCommandPool(copy_pool);
+    GPUCmdBegin(copy_cmd);
+    {
+        GPUBufferToTextureTransfer trans_texture_buffer_desc{};
+        trans_texture_buffer_desc.dst                              = texture;
+        trans_texture_buffer_desc.dst_subresource.mip_level        = 0;
+        trans_texture_buffer_desc.dst_subresource.base_array_layer = 0;
+        trans_texture_buffer_desc.dst_subresource.layer_count      = 1;
+        trans_texture_buffer_desc.src                              = uploadBuffer;
+        trans_texture_buffer_desc.src_offset                       = 0;
+        GPUCmdTransferBufferToTexture(copy_cmd, &trans_texture_buffer_desc);
+        GPUTextureBarrier barrier{};
+        barrier.texture = texture;
+        barrier.src_state = GPU_RESOURCE_STATE_COPY_DEST;
+        barrier.dst_state = GPU_RESOURCE_STATE_SHADER_RESOURCE;
+        GPUResourceBarrierDescriptor rs_barrer{};
+        rs_barrer.texture_barriers      = &barrier;
+        rs_barrer.texture_barriers_count = 1;
+        GPUCmdResourceBarrier(copy_cmd, &rs_barrer);
+    }
+    GPUCmdEnd(copy_cmd);
+    GPUQueueSubmitDescriptor texture_cpy_submit = { .cmds = &copy_cmd, .cmds_count = 1 };
+    GPUSubmitQueue(pGraphicQueue, &texture_cpy_submit);
+    GPUWaitQueueIdle(pGraphicQueue);
+    GPUFreeBuffer(uploadBuffer);
+    // end upload resources
 
     // start create renderpipeline
     //shader
@@ -655,6 +694,9 @@ void RenderGraphSimple()
     GPURootSignatureDescriptor rootRSDesc = {};
     rootRSDesc.shaders                    = shaderEntries;
     rootRSDesc.shader_count               = 2;
+    rootRSDesc.static_sampler_names       = &sampler_name;
+    rootRSDesc.static_sampler_count       = 1;
+    rootRSDesc.static_samplers            = &texture_sampler;
     GPURootSignatureID pRS                = GPUCreateRootSignature(device, &rootRSDesc);
 
     //vertex layout
@@ -708,11 +750,18 @@ void RenderGraphSimple()
                 .AllowRenderTarget();
             });
 
+            auto colorSampleTexHandle = pGraph->CreateTexture([=](RenderGraph& g, TextureBuilder& builder)
+            {
+                builder.SetName("colorSampleTex")
+                .Import(texture, GPU_RESOURCE_STATE_SHADER_RESOURCE);
+            });
+
             pGraph->AddRenderPass(
                 [=](RenderGraph& g, RenderPassBuilder& builder)
                 {
                     builder.SetPipeline(pipeline)
                     .SetName("render pass")
+                    .Read("tex", colorSampleTexHandle)
                     .Write(0, backbufferHandle, EGPULoadAction::GPU_LOAD_ACTION_CLEAR, EGPUStoreAction::GPU_STORE_ACTION_STORE);
                 },
                 [=](RenderGraph& g, RenderPassContext& context)

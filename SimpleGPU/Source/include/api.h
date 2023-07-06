@@ -318,7 +318,7 @@ extern "C" {
 #endif
         GPU_BCF_MAX_ENUM_BIT = 0x7FFFFFFF
     } EGPUBufferCreationFlag;
-    typedef uint32_t CGPUBufferCreationFlags;
+    typedef uint32_t GPUBufferCreationFlags;
 
     typedef enum EGPUFilterType
     {
@@ -1210,7 +1210,7 @@ extern "C" {
         EGPUMemoryUsage memory_usage;
         EGPUFormat format;
         EGPUResourceState start_state;/// What state will the buffer get created in
-        CGPUBufferCreationFlags flags;
+        GPUBufferCreationFlags flags;
         GPUQueueID owner_queue; /// Owner queue of the resource at creation
         bool prefer_on_device;
         bool prefer_on_host;

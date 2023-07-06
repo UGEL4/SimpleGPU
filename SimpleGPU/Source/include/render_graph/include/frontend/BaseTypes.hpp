@@ -145,6 +145,7 @@ struct ObjectHandle<EObjectType::Texture>
     friend class TextureNode;
     friend class RenderGraph;
     friend class TextureRenderEdge;
+    friend class TextureReadEdge;
 protected:
     ObjectHandle(_handle_t handle) : mHandle(handle){}
 private:
@@ -154,6 +155,61 @@ using TextureHandle    = ObjectHandle<EObjectType::Texture>;
 using TextureRTVHandle = TextureHandle::ShaderWriteHandle;
 using TextureSRVHandle = TextureHandle::ShaderReadHandle;
 using TextureDSVHandle = TextureHandle::DepthStencilHandle;
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+template<>
+struct ObjectHandle<EObjectType::Buffer>
+{
+    struct ShaderReadHandle
+    {
+        friend struct ObjectHandle<EObjectType::Buffer>;
+        friend class RenderGraph;
+        friend class BufferReadEdge;
+        ShaderReadHandle(const _handle_t _this)
+        : mThis(_this)
+        {
+
+        }
+        inline operator ObjectHandle<EObjectType::Buffer>() const { return ObjectHandle<EObjectType::Buffer>(mThis); }
+
+    private:
+        _handle_t mThis;
+    };
+    inline operator ShaderReadHandle() const { return ShaderReadHandle(mHandle); }
+
+    struct ShaderReadWriteHandle
+    {
+        friend struct ObjectHandle<EObjectType::Buffer>;
+        friend class RenderGraph;
+        friend class BufferReadEdge;
+        ShaderReadWriteHandle(const _handle_t _this)
+        : mThis(_this)
+        {
+
+        }
+        inline operator ObjectHandle<EObjectType::Buffer>() const { return ObjectHandle<EObjectType::Buffer>(mThis); }
+
+    private:
+        _handle_t mThis;
+    };
+    inline operator ShaderReadWriteHandle() const { return ShaderReadWriteHandle(mHandle); }
+
+    inline operator _handle_t() const { return mHandle; }
+    ObjectHandle() {}
+
+    friend class BufferNode;
+    friend class RenderGraph;
+    friend class BufferReadEdge;
+    friend class BufferReadWriteEdge;
+protected:
+    ObjectHandle(_handle_t handle) : mHandle(handle){}
+private:
+    _handle_t mHandle;
+};
+
+using BufferHandle = ObjectHandle<EObjectType::Buffer>;
+using BufferCBVHandle = ObjectHandle<EObjectType::Buffer>::ShaderReadHandle;
+using BufferUAVHandle = ObjectHandle<EObjectType::Buffer>::ShaderReadWriteHandle;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 struct RenderGraphNode : public DependencyGraphNode

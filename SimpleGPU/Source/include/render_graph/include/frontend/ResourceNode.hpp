@@ -29,3 +29,18 @@ private:
     mutable GPUTextureID m_pFrameTexture;
     mutable EGPUResourceState mInitState = GPU_RESOURCE_STATE_UNDEFINED;
 };
+
+class BufferNode : public ResourceNode
+{
+public:
+    friend class RenderGraph;
+    friend class RenderGraphBackend;
+    BufferNode();
+    BufferHandle GetHandle() const;
+    ~BufferNode() {std::cout << "free BufferNode :" << mId << std::endl;}
+
+private:
+    GPUBufferDescriptor mDesc = {};
+    mutable GPUBufferID m_pBuffer;
+    mutable EGPUResourceState mInitState = GPU_RESOURCE_STATE_UNDEFINED;
+};

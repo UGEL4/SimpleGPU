@@ -46,3 +46,41 @@ TextureNode* TextureReadEdge::GetTextureNode()
     return (TextureNode*)From();
 }
 ///////////TextureWriteEdge////////////////
+///////////BufferEdge////////////////
+BufferEdge::BufferEdge(ERelationshipType type, EGPUResourceState requestedState)
+: RenderGraphEdge(type), mRequestedState(requestedState)
+{
+
+}
+
+BufferReadEdge::BufferReadEdge(const std::string_view& name, BufferCBVHandle handle, EGPUResourceState requestedState)
+: BufferEdge(ERelationshipType::BufferRead, requestedState), mHandle(handle)
+{
+
+}
+PassNode* BufferReadEdge::GetPassNode()
+{
+    return (PassNode*)To();
+}
+
+BufferNode* BufferReadEdge::GetBufferNode()
+{
+    return (BufferNode*)From();
+}
+///////////BufferEdge////////////////
+///////////BufferReadWriteEdge////////////////
+BufferReadWriteEdge::BufferReadWriteEdge(const std::string_view& name, BufferUAVHandle handle, EGPUResourceState requestedState)
+: BufferEdge(ERelationshipType::BufferReadWrite, requestedState), mHandle(handle)
+{
+
+}
+PassNode* BufferReadWriteEdge::GetPassNode()
+{
+    return (PassNode*)To();
+}
+
+BufferNode* BufferReadWriteEdge::GetBufferNode()
+{
+    return (BufferNode*)From();
+}
+///////////BufferReadWriteEdge////////////////

@@ -5,6 +5,7 @@
 #include "GPUBindTable.hpp"
 #include "render_graph/include/backend/TexturePool.hpp"
 #include "render_graph/include/backend/TextureViewPool.hpp"
+#include "render_graph/include/backend/BufferPool.hpp"
 #include "render_graph/include/backend/BindTablePool.hpp"
 #include <unordered_map>
 
@@ -56,4 +57,5 @@ private:
     RenderGraphFrameExecutor mExecutors[RG_MAX_FRAME_IN_FILGHT];
     RG::TexturePool mTexturePool;
     RG::TextureViewPool mTextureViewPool;
+    RG::BufferPool mBufferPool;
 };

@@ -7,6 +7,7 @@
 
 class PassNode;
 class TextureNode;
+class BufferNode;
 class TextureEdge : public RenderGraphEdge
 {
     friend class RenderGraph;
@@ -46,7 +47,7 @@ public:
     friend class RenderGraph;
     friend class RenderGraphBackend;
 
-    TextureReadEdge(const std::string_view& name, TextureSRVHandle handle, EGPUResourceState requestedState = EGPUResourceState::GPU_RESOURCE_STATE_UNORDERED_ACCESS);
+    TextureReadEdge(const std::string_view& name, TextureSRVHandle handle, EGPUResourceState requestedState = EGPUResourceState::GPU_RESOURCE_STATE_SHADER_RESOURCE);
     virtual PassNode* GetPassNode() final;
     virtual TextureNode* GetTextureNode() final;
 
@@ -60,4 +61,43 @@ private:
     uint64_t mNameHash;
     std::string mName; // shader resource name
     TextureSRVHandle mTextureHandle;
+};
+
+////////////////////////////////////////////BufferEdge///////////////////////////////
+class BufferEdge : public RenderGraphEdge
+{
+public:
+    friend class RenderGraph;
+    friend class RenderGraphBackend;
+    BufferEdge(ERelationshipType type, EGPUResourceState requestedState);
+    virtual ~BufferEdge() = default;
+
+    virtual PassNode* GetPassNode() = 0;
+    virtual BufferNode* GetBufferNode() = 0;
+protected:
+    EGPUResourceState mRequestedState;
+};
+
+class BufferReadEdge : public BufferEdge
+{
+public:
+    friend class RenderGraph;
+    friend class RenderGraphBackend;
+    BufferReadEdge(const std::string_view& name, BufferCBVHandle handle, EGPUResourceState requestedState = EGPUResourceState::GPU_RESOURCE_STATE_UNDEFINED);
+    virtual PassNode* GetPassNode() final;
+    virtual BufferNode* GetBufferNode() final;
+private:
+    BufferCBVHandle mHandle;
+};
+
+class BufferReadWriteEdge : public BufferEdge
+{
+public:
+    friend class RenderGraph;
+    friend class RenderGraphBackend;
+    BufferReadWriteEdge(const std::string_view& name, BufferUAVHandle handle, EGPUResourceState requestedState = EGPUResourceState::GPU_RESOURCE_STATE_UNDEFINED);
+    virtual PassNode* GetPassNode() final;
+    virtual BufferNode* GetBufferNode() final;
+private:
+    BufferUAVHandle mHandle;
 };

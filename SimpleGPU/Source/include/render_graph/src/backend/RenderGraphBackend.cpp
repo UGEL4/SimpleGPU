@@ -149,6 +149,7 @@ void RenderGraphBackend::Initialize()
     }
     mTexturePool.Initialize(m_pDevice);
     mTextureViewPool.Initialize(m_pDevice);
+    mBufferPool.Initialize(m_pDevice);
 }
 
 void RenderGraphBackend::Finalize()
@@ -160,6 +161,7 @@ void RenderGraphBackend::Finalize()
     }
     mTextureViewPool.Finalize();
     mTexturePool.Finalize();
+    mBufferPool.Finalize();
 }
 
 void RenderGraphBackend::ExecuteRenderPass(RenderPassNode* pass,  RenderGraphFrameExecutor& executor)

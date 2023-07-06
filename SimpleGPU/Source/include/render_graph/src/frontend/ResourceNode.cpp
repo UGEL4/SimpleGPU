@@ -18,3 +18,14 @@ TextureHandle TextureNode::GetHandle() const
     return TextureHandle(GetId());
 }
 ////////////////texture node//////////////////////////
+////////////////buffer node//////////////////////////
+BufferNode::BufferNode()
+: ResourceNode(EObjectType::Buffer)
+{
+
+}
+BufferHandle BufferNode::GetHandle() const
+{
+    return BufferHandle(GetId());
+}
+////////////////buffer node//////////////////////////

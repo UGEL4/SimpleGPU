@@ -10,6 +10,7 @@ class RenderPassNode;
 class ResourceNode;
 class TextureEdge;
 class PresentPassNode;
+class BufferNode;
 
 class RenderGraph
 {
@@ -92,6 +93,36 @@ public:
     using PresentPassSetupFunc = std::function<void(RenderGraph&, PresentPassBuilder&)>;
     PassHandle AddPresentPass(const PresentPassSetupFunc& setup);
 
+    class BufferBuilder
+    {
+    public:
+        friend class RenderGraph;
+        BufferBuilder& SetrName(const char* name);
+        BufferBuilder& Import(GPUBufferID buffer, EGPUResourceState initState);
+        BufferBuilder& OwnsMemory();
+        //BufferBuilder& structured(uint64_t first_element, uint64_t element_count, uint64_t element_stride) SKR_NOEXCEPT;
+        BufferBuilder& Size(uint64_t size);
+        BufferBuilder& WithFlags(GPUBufferCreationFlags flags);
+        BufferBuilder& MemoryUsage(EGPUMemoryUsage mem_usage);
+        //BufferBuilder& allow_shader_readwrite() SKR_NOEXCEPT;
+        BufferBuilder& AllowShaderRead();
+        BufferBuilder& AsUploadBuffer();
+        BufferBuilder& AsVertexBuffer();
+        BufferBuilder& AsIndexBuffer();
+        BufferBuilder& AsUniformBuffer();
+        BufferBuilder& PreferOnDevice();
+        BufferBuilder& PreferOnHost();
+
+    protected:
+        BufferBuilder(RenderGraph& graph, BufferNode& node);
+        RenderGraph& mGraph;
+        BufferNode& mNode;
+    };
+    using BufferSetupFunc = std::function<void(RenderGraph&, BufferBuilder&)>;
+    BufferHandle CreateBuffer(const BufferSetupFunc& setup);
+    EGPUResourceState GetLastestState(const BufferNode* buffer, const PassNode* pending_pass);
+    //BufferHandle GetBufferHandle(const char* name);
+
     RenderGraph();
     virtual ~RenderGraph() = default;
 
@@ -109,3 +140,4 @@ using RenderGraphBuilder = RenderGraph::RenderGraphBuilder;
 using RenderPassBuilder  = RenderGraph::RenderPassBuilder;
 using TextureBuilder     = RenderGraph::TextureBuilder;
 using PresentPassBuilder = RenderGraph::PresentPassBuilder;
+using BufferBuilder      = RenderGraph::BufferBuilder;

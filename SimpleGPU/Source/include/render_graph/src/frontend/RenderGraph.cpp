@@ -313,6 +313,64 @@ PassHandle RenderGraph::AddPresentPass(const PresentPassSetupFunc& setup)
 
 ///////////PresentPassBuilder//////////////////
 
+///////////BufferBuilder//////////////////
+RenderGraph::BufferBuilder::BufferBuilder(RenderGraph& graph, BufferNode& node)
+: mGraph(graph), mNode(node)
+{
+    
+}
+
+BufferHandle RenderGraph::CreateBuffer(const BufferSetupFunc& setup)
+{
+    auto node = m_pNAEFactory->Allocate<BufferNode>();
+    mResources.emplace_back(node);
+    m_pGraph->Insert(node);
+
+    BufferBuilder builder(*this, *node);
+    setup(*this, builder);
+    return node->GetHandle();
+}
+
+EGPUResourceState RenderGraph::GetLastestState(const BufferNode* buffer, const PassNode* pending_pass)
+{
+if (mPasses[0] == pending_pass) return buffer->mInitState;
+
+    PassNode* pass_iter = nullptr;
+    EGPUResourceState result = buffer->mInitState;
+
+    //each write pass
+    ForeachWriterPass(texture->GetHandle(),
+    [&](TextureNode* tex, PassNode* pass, RenderGraphEdge* edge)
+    {
+        if (edge->type == ERelationshipType::TextureWrite)
+        {
+            auto writeEdge = static_cast<TextureWriteEdge*>(edge);
+            if (pass->After(pass_iter) && pass->Before(pending_pass))
+            {
+                pass_iter = pass;
+                result    = writeEdge->mRequestedState;
+            }
+        }
+    });
+
+    //each read pass
+    ForeachReaderPass(texture->GetHandle(), [&](TextureNode* tex, PassNode* pass, RenderGraphEdge* edge)
+    {
+        if (edge->type == ERelationshipType::TextureRead)
+        {
+            auto readEdge = static_cast<TextureReadEdge*>(edge);
+            if (pass->After(pass_iter) && pass->Before(pending_pass))
+            {
+                pass_iter = pass;
+                result    = readEdge->mRequestedState;
+            }
+        }
+    });
+
+    return result;
+}
+///////////BufferBuilder//////////////////
+
 RenderGraph::RenderGraph()
 {
 
