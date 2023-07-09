@@ -2584,6 +2584,48 @@ void GPUCmdTransferBufferToTexture_Vulkan(GPUCommandBufferID cmd, const struct G
     }
 }
 
+void GPUCmdTransferBufferToBuffer_Vulkan(GPUCommandBufferID cmd, const struct GPUBufferToBufferTransfer* desc)
+{
+    GPUCommandBuffer_Vulkan* Cmd = (GPUCommandBuffer_Vulkan*)cmd;
+    GPUDevice_Vulkan* D          = (GPUDevice_Vulkan*)cmd->device;
+    GPUBuffer_Vulkan* Src        = (GPUBuffer_Vulkan*)desc->src;
+    GPUBuffer_Vulkan* Dst        = (GPUBuffer_Vulkan*)desc->dst;
+    VkBufferCopy copy{};
+    copy.srcOffset = desc->src_offset;
+    copy.dstOffset = desc->dst_offset;
+    copy.size      = desc->size;
+    D->mVkDeviceTable.vkCmdCopyBuffer(Cmd->pVkCmd, Src->pVkBuffer, Dst->pVkBuffer, 1, &copy);
+}
+
+ void GPUCmdTransferTextureToTexture_Vulkan(GPUCommandBufferID cmd, const struct GPUTextureToTextureTransfer* desc)
+ {
+    GPUCommandBuffer_Vulkan* Cmd = (GPUCommandBuffer_Vulkan*)cmd;
+    GPUDevice_Vulkan* D          = (GPUDevice_Vulkan*)cmd->device;
+    GPUTexture_Vulkan* Src       = (GPUTexture_Vulkan*)desc->src;
+    GPUTexture_Vulkan* Dst       = (GPUTexture_Vulkan*)desc->dst;
+
+    const bool isSinglePlane = true;
+    if (isSinglePlane)
+    {
+        const uint32_t width  = gpu_max(1, desc->dst->width >> desc->dst_subresource.mip_level);
+        const uint32_t height = gpu_max(1, desc->dst->height >> desc->dst_subresource.mip_level);
+        const uint32_t depth  = gpu_max(1, desc->dst->depth >> desc->dst_subresource.mip_level);
+        VkImageCopy copy;
+        copy.srcSubresource.aspectMask     = (VkImageAspectFlags)desc->src_subresource.aspects;
+        copy.srcSubresource.mipLevel       = desc->src_subresource.mip_level;
+        copy.srcSubresource.baseArrayLayer = desc->src_subresource.base_array_layer;
+        copy.srcSubresource.layerCount     = desc->src_subresource.layer_count;
+        copy.srcOffset                     = { 0, 0, 0 };
+        copy.dstSubresource.aspectMask     = (VkImageAspectFlags)desc->dst_subresource.aspects;
+        copy.dstSubresource.mipLevel       = desc->dst_subresource.mip_level;
+        copy.dstSubresource.baseArrayLayer = desc->dst_subresource.base_array_layer;
+        copy.dstSubresource.layerCount     = desc->dst_subresource.layer_count;
+        copy.dstOffset                     = { 0, 0, 0 };
+        copy.extent                        = { width, height, depth };
+        D->mVkDeviceTable.vkCmdCopyImage(Cmd->pVkCmd, Src->pVkImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, Dst->pVkImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
+    }
+ }
+
 GPUFenceID GPUCreateFence_Vulkan(GPUDeviceID device)
 {
     GPUDevice_Vulkan* D = (GPUDevice_Vulkan*)device;

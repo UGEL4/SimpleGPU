@@ -406,7 +406,32 @@ void GPUCmdTransferBufferToTexture(GPUCommandBufferID cmd, const struct GPUBuffe
     assert(cmd);
     assert(cmd->device);
     assert(cmd->device->pProcTableCache->CmdTransferBufferToTexture);
+    assert(desc->src != nullptr);
+    assert(desc->dst != nullptr);
+    assert(cmd->currentDispatch == GPU_PIPELINE_TYPE_NONE);
     cmd->device->pProcTableCache->CmdTransferBufferToTexture(cmd, desc);
+}
+
+void GPUCmdTransferBufferToBuffer(GPUCommandBufferID cmd, const struct GPUBufferToBufferTransfer* desc)
+{
+    assert(cmd);
+    assert(cmd->device);
+    assert(cmd->device->pProcTableCache->TransferBufferToBuffer);
+    assert(desc->src != nullptr);
+    assert(desc->dst != nullptr);
+    assert(cmd->currentDispatch == GPU_PIPELINE_TYPE_NONE);
+    cmd->device->pProcTableCache->TransferBufferToBuffer(cmd, desc);
+}
+
+void GPUCmdTransferTextureToTexture(GPUCommandBufferID cmd, const struct GPUTextureToTextureTransfer* desc)
+{
+    assert(cmd);
+    assert(cmd->device);
+    assert(cmd->device->pProcTableCache->CmdTransferTextureToTexture);
+    assert(desc->src != nullptr);
+    assert(desc->dst != nullptr);
+    assert(cmd->currentDispatch == GPU_PIPELINE_TYPE_NONE);
+    cmd->device->pProcTableCache->CmdTransferTextureToTexture(cmd, desc);
 }
 
 GPUFenceID GPUCreateFence(GPUDeviceID device)

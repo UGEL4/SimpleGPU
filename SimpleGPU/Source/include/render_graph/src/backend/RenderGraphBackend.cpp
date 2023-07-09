@@ -346,30 +346,30 @@ void RenderGraphBackend::ExectueCopyPass(CopyPassNode* pass, RenderGraphFrameExe
     {
         auto src_node = RenderGraph::Resolve(pass->mT2Ts[i].first);
         auto dst_node = RenderGraph::Resolve(pass->mT2Ts[i].second);
-        /* GPUTextureToTextureTransfer t2t = {};
-        t2t.src = resolve(executor, *src_node);
-        t2t.src_subresource.aspects = pass->t2ts[i].first.aspects;
-        t2t.src_subresource.mip_level = pass->t2ts[i].first.mip_level;
-        t2t.src_subresource.base_array_layer = pass->t2ts[i].first.array_base;
-        t2t.src_subresource.layer_count = pass->t2ts[i].first.array_count;
-        t2t.dst = resolve(executor, *dst_node);
-        t2t.dst_subresource.aspects = pass->t2ts[i].second.aspects;
-        t2t.dst_subresource.mip_level = pass->t2ts[i].second.mip_level;
-        t2t.dst_subresource.base_array_layer = pass->t2ts[i].second.array_base;
-        t2t.dst_subresource.layer_count = pass->t2ts[i].second.array_count;
-        cgpu_cmd_transfer_texture_to_texture(executor.gfx_cmd_buf, &t2t); */
+        GPUTextureToTextureTransfer t2t      = {};
+        t2t.src                              = Resolve(executor, *src_node);
+        t2t.src_subresource.aspects          = pass->mT2Ts[i].first.aspects;
+        t2t.src_subresource.mip_level        = pass->mT2Ts[i].first.mip_level;
+        t2t.src_subresource.base_array_layer = pass->mT2Ts[i].first.array_base;
+        t2t.src_subresource.layer_count      = pass->mT2Ts[i].first.array_count;
+        t2t.dst                              = Resolve(executor, *dst_node);
+        t2t.dst_subresource.aspects          = pass->mT2Ts[i].second.aspects;
+        t2t.dst_subresource.mip_level        = pass->mT2Ts[i].second.mip_level;
+        t2t.dst_subresource.base_array_layer = pass->mT2Ts[i].second.array_base;
+        t2t.dst_subresource.layer_count      = pass->mT2Ts[i].second.array_count;
+        GPUCmdTransferTextureToTexture(executor.m_pCmd, &t2t);
     }
     for (uint32_t i = 0; i < pass->mB2Bs.size(); i++)
     {
         auto src_node = RenderGraph::Resolve(pass->mB2Bs[i].first);
         auto dst_node = RenderGraph::Resolve(pass->mB2Bs[i].second);
         GPUBufferToBufferTransfer b2b = {};
-        /* b2b.src = Resolve(executor, *src_node);
-        b2b.src_offset = pass->mB2Bs[i].first.mFrom;
-        b2b.dst = Resolve(executor, *dst_node);
-        b2b.dst_offset = pass->mB2Bs[i].second.mFrom;
-        b2b.size = pass->mB2Bs[i].first.mTo - b2b.src_offset;
-        GPUCmdTransferBufferToBuffer(executor.m_pCmd, &b2b); */
+        b2b.src                       = Resolve(executor, *src_node);
+        b2b.src_offset                = pass->mB2Bs[i].first.mFrom;
+        b2b.dst                       = Resolve(executor, *dst_node);
+        b2b.dst_offset                = pass->mB2Bs[i].second.mFrom;
+        b2b.size                      = pass->mB2Bs[i].first.mTo - b2b.src_offset;
+        GPUCmdTransferBufferToBuffer(executor.m_pCmd, &b2b);
     }
     for (uint32_t i = 0; i < pass->mB2Ts.size(); i++)
     {

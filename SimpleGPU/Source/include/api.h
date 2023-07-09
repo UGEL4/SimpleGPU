@@ -516,6 +516,10 @@ extern "C" {
     typedef void (*GPUProcCmdResourceBarrier)(GPUCommandBufferID cmd, const struct GPUResourceBarrierDescriptor* desc);
     void GPUCmdTransferBufferToTexture(GPUCommandBufferID cmd, const struct GPUBufferToTextureTransfer* desc);
     typedef void (*GPUProcCmdTransferBufferToTexture)(GPUCommandBufferID cmd, const struct GPUBufferToTextureTransfer* desc);
+    void GPUCmdTransferBufferToBuffer(GPUCommandBufferID cmd, const struct GPUBufferToBufferTransfer* desc);
+    typedef void (*GPUProcCmdTransferBufferToBuffer)(GPUCommandBufferID cmd, const struct GPUBufferToBufferTransfer* desc);
+    void GPUCmdTransferTextureToTexture(GPUCommandBufferID cmd, const struct GPUTextureToTextureTransfer* desc);
+    typedef void (*GPUProcCmdTransferTextureToTexture)(GPUCommandBufferID cmd, const struct GPUTextureToTextureTransfer* desc);
 
     //fence & semaphore
     GPUFenceID GPUCreateFence(GPUDeviceID device);
@@ -629,6 +633,8 @@ extern "C" {
         const GPUProcCmdEnd CmdEnd;
         const GPUProcCmdResourceBarrier CmdResourceBarrier;
         const GPUProcCmdTransferBufferToTexture CmdTransferBufferToTexture;
+        const GPUProcCmdTransferBufferToBuffer CmdTransferBufferToBuffer;
+        const GPUProcCmdTransferTextureToTexture CmdTransferTextureToTexture;
 
         //fence & semaphore
         const GPUProcCreateFence CreateFence;
@@ -909,6 +915,14 @@ extern "C" {
         GPUBufferID src;
         uint64_t src_offset;
     } GPUBufferToTextureTransfer;
+
+    typedef struct GPUTextureToTextureTransfer
+    {
+        GPUTextureID src;
+        GPUTextureID dst;
+        GPUTextureSubresource src_subresource;
+        GPUTextureSubresource dst_subresource;
+    } GPUTextureToTextureTransfer;
 
     typedef struct GPUShaderLibraryDescriptor
     {

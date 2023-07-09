@@ -78,6 +78,8 @@ extern "C" {
     void GPUCmdEnd_Vulkan(GPUCommandBufferID cmdBuffer);
     void GPUCmdResourceBarrier_Vulkan(GPUCommandBufferID cmd, const GPUResourceBarrierDescriptor* desc);
     void GPUCmdTransferBufferToTexture_Vulkan(GPUCommandBufferID cmd, const struct GPUBufferToTextureTransfer* desc);
+    void GPUCmdTransferBufferToBuffer_Vulkan(GPUCommandBufferID cmd, const struct GPUBufferToBufferTransfer* desc);
+    void GPUCmdTransferTextureToTexture_Vulkan(GPUCommandBufferID cmd, const struct GPUTextureToTextureTransfer* desc);
 
     //fence & semaphore
     GPUFenceID GPUCreateFence_Vulkan(GPUDeviceID device);
