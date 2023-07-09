@@ -1,4 +1,4 @@
-#include <iostream>
+/* #include <iostream>
 #include "render_graph/include/backend/RenderGraphBackend.h"
 #include "render_graph/include/Graph_Boost.hpp"
 #include <string>
@@ -30,7 +30,7 @@ int main()
 
     graph->Compile();
     graph->Execute();
-    RenderGraph::Destroy(graph);
+    RenderGraph::Destroy(graph); */
 
 
     /* DependencyGraph* g = DependencyGraph::Create();
@@ -130,5 +130,5 @@ int main()
         std::cout << prop[*iter] << ", "; */
     //}
     //std::cout << std::endl;
-    return 0;
-}
+    /* return 0;
+} */

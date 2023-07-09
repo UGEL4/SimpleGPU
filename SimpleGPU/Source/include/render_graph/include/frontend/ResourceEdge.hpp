@@ -56,6 +56,7 @@ public:
     const uint32_t GetArrayBase() const { return mTextureHandle.mArrayBase; }
     const uint32_t GetArrayCount() const { return mTextureHandle.mArrayCount; }
     const EGPUTextureDimension GetDimension() const { return mTextureHandle.mDim; }
+    const char* GetName() const { return mName.c_str(); }
 
 private:
     uint64_t mNameHash;
@@ -83,11 +84,14 @@ class BufferReadEdge : public BufferEdge
 public:
     friend class RenderGraph;
     friend class RenderGraphBackend;
-    BufferReadEdge(const std::string_view& name, BufferCBVHandle handle, EGPUResourceState requestedState = EGPUResourceState::GPU_RESOURCE_STATE_UNDEFINED);
+    BufferReadEdge(const std::string_view& name, BufferRangeHandle handle, EGPUResourceState requestedState = EGPUResourceState::GPU_RESOURCE_STATE_UNDEFINED);
     virtual PassNode* GetPassNode() final;
     virtual BufferNode* GetBufferNode() final;
+    const char* GetName() const { return mName.c_str(); }
 private:
-    BufferCBVHandle mHandle;
+    uint64_t mNameHash;
+    std::string mName; // shader resource name
+    BufferRangeHandle mHandle;
 };
 
 class BufferReadWriteEdge : public BufferEdge
@@ -95,9 +99,9 @@ class BufferReadWriteEdge : public BufferEdge
 public:
     friend class RenderGraph;
     friend class RenderGraphBackend;
-    BufferReadWriteEdge(const std::string_view& name, BufferUAVHandle handle, EGPUResourceState requestedState = EGPUResourceState::GPU_RESOURCE_STATE_UNDEFINED);
+    BufferReadWriteEdge(BufferRangeHandle handle, EGPUResourceState requestedState = EGPUResourceState::GPU_RESOURCE_STATE_UNDEFINED);
     virtual PassNode* GetPassNode() final;
     virtual BufferNode* GetBufferNode() final;
 private:
-    BufferUAVHandle mHandle;
+    BufferRangeHandle mHandle;
 };

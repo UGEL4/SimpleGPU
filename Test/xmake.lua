@@ -1,0 +1,1 @@
+includes("SimpleGPU/xmake.lua")

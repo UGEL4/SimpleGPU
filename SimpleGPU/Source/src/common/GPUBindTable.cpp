@@ -99,7 +99,7 @@ void GPUBindTable::Bind(GPURenderPassEncoderID encoder) const
 
 void GPUBindTable::Update(const GPUDescriptorData* pData, uint32_t count)
 {
-    for (int32_t i = 0;  i < count; i++)
+    for (uint32_t i = 0;  i < count; i++)
     {
         const auto& data = pData[i];
         if (data.name)

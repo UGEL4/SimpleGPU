@@ -2,8 +2,10 @@
 
 #include "render_graph/include/DependencyGraph.hpp"
 #include "api.h"
+#include <stdint.h>
 #include <string>
 #include <functional>
+#include <span>
 
 typedef uint64_t _handle_t;
 enum class EObjectType : uint8_t
@@ -139,6 +141,23 @@ struct ObjectHandle<EObjectType::Texture>
     };
     inline operator ShaderReadHandle() const { return ShaderReadHandle(mHandle); }
 
+    struct SubresourceHandle
+    {
+        friend struct ObjectHandle<EObjectType::Texture>;
+        friend class RenderGraph;
+        friend class RenderGraphBackend;
+        inline operator ObjectHandle<EObjectType::Texture>() const { return ObjectHandle<EObjectType::Texture>(mThis); }
+
+        SubresourceHandle(const _handle_t _this) : mThis(_this) {}
+    protected:
+        _handle_t mThis;
+        uint32_t mip_level            = 0;
+        uint32_t array_base           = 0;
+        uint32_t array_count          = 1;
+        GPUTextureViewAspects aspects = GPU_TVA_COLOR;
+    };
+    inline operator SubresourceHandle() const { return SubresourceHandle(mHandle); }
+
     inline operator _handle_t() const { return mHandle; }
     ObjectHandle() {}
 
@@ -151,10 +170,11 @@ protected:
 private:
     _handle_t mHandle;
 };
-using TextureHandle    = ObjectHandle<EObjectType::Texture>;
-using TextureRTVHandle = TextureHandle::ShaderWriteHandle;
-using TextureSRVHandle = TextureHandle::ShaderReadHandle;
-using TextureDSVHandle = TextureHandle::DepthStencilHandle;
+using TextureHandle            = ObjectHandle<EObjectType::Texture>;
+using TextureRTVHandle         = TextureHandle::ShaderWriteHandle;
+using TextureSRVHandle         = TextureHandle::ShaderReadHandle;
+using TextureDSVHandle         = TextureHandle::DepthStencilHandle;
+using TextureSubresourceHandle = TextureHandle::SubresourceHandle;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 template<>
@@ -194,6 +214,27 @@ struct ObjectHandle<EObjectType::Buffer>
     };
     inline operator ShaderReadWriteHandle() const { return ShaderReadWriteHandle(mHandle); }
 
+    struct BufferRangeHandle
+    {
+        friend struct ObjectHandle<EObjectType::Buffer>;
+        friend class RenderGraph;
+        friend class RenderGraphBackend;
+        friend class BufferReadEdge;
+
+        BufferRangeHandle(const _handle_t _this, uint64_t from, uint64_t to)
+        : mThis(_this), mFrom(from), mTo(to)
+        {
+
+        }
+        inline operator ObjectHandle<EObjectType::Buffer>() const { return ObjectHandle<EObjectType::Buffer>(mThis); }
+
+    private:
+        _handle_t mThis;
+        uint64_t mFrom;
+        uint64_t mTo;
+    };
+    inline BufferRangeHandle BufferRange(uint64_t from, uint64_t to) const { return BufferRangeHandle(mHandle, from, to); }
+
     inline operator _handle_t() const { return mHandle; }
     ObjectHandle() {}
 
@@ -204,12 +245,13 @@ struct ObjectHandle<EObjectType::Buffer>
 protected:
     ObjectHandle(_handle_t handle) : mHandle(handle){}
 private:
-    _handle_t mHandle;
+    _handle_t mHandle = UINT64_MAX;
 };
 
-using BufferHandle = ObjectHandle<EObjectType::Buffer>;
-using BufferCBVHandle = ObjectHandle<EObjectType::Buffer>::ShaderReadHandle;
-using BufferUAVHandle = ObjectHandle<EObjectType::Buffer>::ShaderReadWriteHandle;
+using BufferHandle      = ObjectHandle<EObjectType::Buffer>;
+using BufferCBVHandle   = BufferHandle::ShaderReadHandle;
+using BufferUAVHandle   = BufferHandle::ShaderReadWriteHandle;
+using BufferRangeHandle = BufferHandle::BufferRangeHandle;
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 struct RenderGraphNode : public DependencyGraphNode
@@ -240,6 +282,26 @@ struct PassContext
     PassNode* m_pPassNode;
     RenderGraphBackend* m_pGraph;
     GPUCommandBufferID m_pCmd;
+    std::span<std::pair<BufferHandle, GPUBufferID>> mResolvedBuffers;
+    std::span<std::pair<TextureHandle, GPUTextureID>> mResolvedTextures;
+
+    GPUBufferID Resolve(BufferHandle buffer_handle) const
+    {
+        for (auto iter : mResolvedBuffers)
+        {
+            if (iter.first == buffer_handle) return iter.second;
+        }
+        return nullptr;
+    }
+
+    GPUTextureID Resolve(TextureHandle tex_handle) const
+    {
+        for (auto iter : mResolvedTextures)
+        {
+            if (iter.first == tex_handle) return iter.second;
+        }
+        return nullptr;
+    }
 };
 
 struct RenderPassContext : public PassContext
@@ -248,4 +310,10 @@ struct RenderPassContext : public PassContext
     const struct GPUBindTable* m_pBindTable;
 };
 
+struct CopyPassContext : public PassContext
+{
+
+};
+
 using RenderPassExecuteFunction = std::function<void(RenderGraph&, RenderPassContext&)>;
+using CopyPassExecuteFunction = std::function<void(RenderGraph&, CopyPassContext&)>;

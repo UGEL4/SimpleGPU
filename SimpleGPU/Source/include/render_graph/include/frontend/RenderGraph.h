@@ -11,6 +11,7 @@ class ResourceNode;
 class TextureEdge;
 class PresentPassNode;
 class BufferNode;
+class CopyPassNode;
 
 class RenderGraph
 {
@@ -35,8 +36,8 @@ public:
     virtual void Finalize();
 
     EGPUResourceState GetLastestState(const TextureNode* texture, const PassNode* pending_pass);
-    void ForeachWriterPass(const TextureHandle handle, const std::function<void(TextureNode* texture, PassNode* pass, RenderGraphEdge* edge)>&);
-    void ForeachReaderPass(const TextureHandle handle, const std::function<void(TextureNode* texture, PassNode* pass, RenderGraphEdge* edge)>&);
+    uint32_t ForeachWriterPass(const TextureHandle handle, const std::function<void(TextureNode* texture, PassNode* pass, RenderGraphEdge* edge)>&);
+    uint32_t ForeachReaderPass(const TextureHandle handle, const std::function<void(TextureNode* texture, PassNode* pass, RenderGraphEdge* edge)>&);
 
     class RenderPassBuilder
     {
@@ -97,14 +98,14 @@ public:
     {
     public:
         friend class RenderGraph;
-        BufferBuilder& SetrName(const char* name);
+        BufferBuilder& SetName(const char* name);
         BufferBuilder& Import(GPUBufferID buffer, EGPUResourceState initState);
         BufferBuilder& OwnsMemory();
         //BufferBuilder& structured(uint64_t first_element, uint64_t element_count, uint64_t element_stride) SKR_NOEXCEPT;
         BufferBuilder& Size(uint64_t size);
         BufferBuilder& WithFlags(GPUBufferCreationFlags flags);
         BufferBuilder& MemoryUsage(EGPUMemoryUsage mem_usage);
-        //BufferBuilder& allow_shader_readwrite() SKR_NOEXCEPT;
+        BufferBuilder& AllowShaderReadWrite();
         BufferBuilder& AllowShaderRead();
         BufferBuilder& AsUploadBuffer();
         BufferBuilder& AsVertexBuffer();
@@ -122,6 +123,33 @@ public:
     BufferHandle CreateBuffer(const BufferSetupFunc& setup);
     EGPUResourceState GetLastestState(const BufferNode* buffer, const PassNode* pending_pass);
     //BufferHandle GetBufferHandle(const char* name);
+
+    uint32_t ForeachWriterPass(const BufferHandle handle, const std::function<void(BufferNode*, PassNode*, RenderGraphEdge*)>&);
+    uint32_t ForeachReaderPass(const BufferHandle handle, const std::function<void(BufferNode*, PassNode*, RenderGraphEdge*)>&);
+
+    class CopyPassBuilder
+    {
+    public:
+        friend class RenderGraph;
+    protected:
+        CopyPassBuilder(RenderGraph& graph, CopyPassNode& node);
+    public:
+        CopyPassBuilder& SetName(const char* name);
+        CopyPassBuilder& CanBeLone();
+        CopyPassBuilder& TextureToTexture(TextureSubresourceHandle src, TextureSubresourceHandle dst, EGPUResourceState dstState = GPU_RESOURCE_STATE_COPY_DEST);
+        CopyPassBuilder& BufferToBuffer(BufferRangeHandle src, BufferRangeHandle dst, EGPUResourceState dstState = GPU_RESOURCE_STATE_COPY_DEST);
+        CopyPassBuilder& BufferToTexture(BufferRangeHandle src, TextureSubresourceHandle dst, EGPUResourceState dstState = GPU_RESOURCE_STATE_COPY_DEST);
+        CopyPassBuilder& FromBuffer(BufferRangeHandle src);
+    private:
+        RenderGraph& mGraph;
+        CopyPassNode& mPassNode;
+    };
+    using CopyPassSetupFunc = std::function<void(RenderGraph&, CopyPassBuilder&)>;
+    PassHandle AddCopyPass(const CopyPassSetupFunc& setup, const CopyPassExecuteFunction& execute);
+
+    BufferNode* Resolve(BufferHandle hdl); 
+    TextureNode* Resolve(TextureHandle hdl);
+    PassNode* Resolve(PassHandle hdl);
 
     RenderGraph();
     virtual ~RenderGraph() = default;
@@ -141,3 +169,4 @@ using RenderPassBuilder  = RenderGraph::RenderPassBuilder;
 using TextureBuilder     = RenderGraph::TextureBuilder;
 using PresentPassBuilder = RenderGraph::PresentPassBuilder;
 using BufferBuilder      = RenderGraph::BufferBuilder;
+using CopyPassBuilder    = RenderGraph::CopyPassBuilder;

@@ -39,6 +39,29 @@ std::span<TextureWriteEdge*> PassNode::GetTextureWriteEdges()
     return std::span<TextureWriteEdge*>(mOutTextureEdges.data(), mOutTextureEdges.size());
 }
 
+std::span<BufferReadEdge*> PassNode::GetBufferReadEdges()
+{
+    return std::span<BufferReadEdge*>(mInBufferEdges.data(), mInBufferEdges.size());
+}
+
+std::span<BufferReadWriteEdge*> PassNode::GetBufferReadWriteEdges()
+{
+    return std::span<BufferReadWriteEdge*>(mOutBufferEdges.data(), mOutBufferEdges.size());
+}
+
+void PassNode::ForeachBuffer(const std::function<void(BufferNode* bufferNode, BufferEdge* bifferEdge)>& func)
+{
+    for (auto e : mInBufferEdges)
+    {
+        func(e->GetBufferNode(), e);
+    }
+
+    for (auto e : mOutBufferEdges)
+    {
+        func(e->GetBufferNode(), e);
+    }
+}
+
 PassNode::PassNode(EPassType type, uint32_t order)
 : RenderGraphNode(EObjectType::Pass), mOrder(order), mPassType(type), mCanBeLone(false)
 {
@@ -55,6 +78,13 @@ RenderPassNode::RenderPassNode(uint32_t order)
 /////////////////////////////////////PresentPassNode
 PresentPassNode::PresentPassNode(uint32_t order)
 : PassNode(EPassType::Present, order)
+{
+
+}
+
+/////////////////////////////////////CopyPassNode
+CopyPassNode::CopyPassNode(uint32_t order)
+: PassNode(EPassType::Copy, order)
 {
 
 }

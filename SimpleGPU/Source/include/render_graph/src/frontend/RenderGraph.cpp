@@ -51,8 +51,9 @@ void RenderGraph::Compile()
         std::remove_if(mPasses.begin(), mPasses.end(), [this](PassNode* pass)
         {
             bool lone = !(pass->InComingEdges() + pass->OutGoingEdges());
-            if (lone && !pass->mCanBeLone) mCulledPasses.emplace_back(pass);
-            return lone;
+            bool culled = lone && !pass->mCanBeLone;
+            if (culled) mCulledPasses.emplace_back(pass);
+            return culled;
         }),
         mPasses.end()
     );
@@ -107,6 +108,10 @@ EGPUResourceState RenderGraph::GetLastestState(const TextureNode* texture, const
                 result    = writeEdge->mRequestedState;
             }
         }
+        else if (edge->type == ERelationshipType::TextureReadWrite)
+        {
+            //TextureReadWrite edge
+        }
     });
 
     //each read pass
@@ -126,9 +131,9 @@ EGPUResourceState RenderGraph::GetLastestState(const TextureNode* texture, const
     return result;
 }
 
-void RenderGraph::ForeachWriterPass(const TextureHandle handle, const std::function<void(TextureNode* texture, PassNode* pass, RenderGraphEdge* edge)>& func)
+uint32_t RenderGraph::ForeachWriterPass(const TextureHandle handle, const std::function<void(TextureNode* texture, PassNode* pass, RenderGraphEdge* edge)>& func)
 {
-    m_pGraph->ForeachIncomingEdges(handle, [&](DependencyGraphNode* from, DependencyGraphNode* to, DependencyGraphEdge* e) 
+    return m_pGraph->ForeachIncomingEdges(handle, [&](DependencyGraphNode* from, DependencyGraphNode* to, DependencyGraphEdge* e) 
     {
         PassNode* node            = static_cast<PassNode*>(from);
         TextureNode* tex          = static_cast<TextureNode*>(to);
@@ -137,9 +142,9 @@ void RenderGraph::ForeachWriterPass(const TextureHandle handle, const std::funct
     });
 }
 
-void RenderGraph::ForeachReaderPass(const TextureHandle handle, const std::function<void(TextureNode* texture, PassNode* pass, RenderGraphEdge* edge)>& func)
+uint32_t RenderGraph::ForeachReaderPass(const TextureHandle handle, const std::function<void(TextureNode* texture, PassNode* pass, RenderGraphEdge* edge)>& func)
 {
-    m_pGraph->ForeachOutgoingEdges(handle, [&](DependencyGraphNode* from, DependencyGraphNode* to, DependencyGraphEdge* e) 
+    return m_pGraph->ForeachOutgoingEdges(handle, [&](DependencyGraphNode* from, DependencyGraphNode* to, DependencyGraphEdge* e) 
     {
         PassNode* node            = static_cast<PassNode*>(to);
         TextureNode* tex          = static_cast<TextureNode*>(from);
@@ -320,6 +325,101 @@ RenderGraph::BufferBuilder::BufferBuilder(RenderGraph& graph, BufferNode& node)
     
 }
 
+RenderGraph::BufferBuilder& RenderGraph::BufferBuilder::SetName(const char* name)
+{
+    mNode.SetName(name);
+    return *this;
+}
+
+RenderGraph::BufferBuilder& RenderGraph::BufferBuilder::Import(GPUBufferID buffer, EGPUResourceState initState)
+{
+    mNode.mImported          = buffer;
+    mNode.mInitState         = initState;
+    mNode.m_pBuffer          = buffer;
+    mNode.mDesc.size         = buffer->size;
+    mNode.mDesc.descriptors  = buffer->descriptors;
+    mNode.mDesc.memory_usage = (EGPUMemoryUsage)buffer->memory_usage;
+    return *this;
+}
+
+RenderGraph::BufferBuilder& RenderGraph::BufferBuilder::OwnsMemory()
+{
+    mNode.mDesc.flags |= GPU_BCF_OWN_MEMORY_BIT;
+    return *this;
+}
+
+RenderGraph::BufferBuilder& RenderGraph::BufferBuilder::Size(uint64_t size)
+{
+    mNode.mDesc.size = size;
+    return *this;
+}
+
+RenderGraph::BufferBuilder& RenderGraph::BufferBuilder::WithFlags(GPUBufferCreationFlags flags)
+{
+    mNode.mDesc.flags |= flags;
+    return *this;
+}
+
+RenderGraph::BufferBuilder& RenderGraph::BufferBuilder::MemoryUsage(EGPUMemoryUsage mem_usage)
+{
+    mNode.mDesc.memory_usage = mem_usage;
+    return *this;
+}
+
+RenderGraph::BufferBuilder& RenderGraph::BufferBuilder::AllowShaderReadWrite()
+{
+    mNode.mDesc.descriptors |= GPU_RESOURCE_TYPE_RW_BUFFER;
+    return *this;
+}
+
+RenderGraph::BufferBuilder& RenderGraph::BufferBuilder::AllowShaderRead()
+{
+    mNode.mDesc.descriptors |= GPU_RESOURCE_TYPE_BUFFER;
+    mNode.mDesc.descriptors |= GPU_RESOURCE_TYPE_UNIFORM_BUFFER;
+    return *this;
+}
+
+RenderGraph::BufferBuilder& RenderGraph::BufferBuilder::AsUploadBuffer()
+{
+    mNode.mDesc.flags |= GPU_BCF_PERSISTENT_MAP_BIT;
+    mNode.mDesc.start_state  = GPU_RESOURCE_STATE_COPY_SOURCE;
+    mNode.mDesc.memory_usage = GPU_MEM_USAGE_CPU_ONLY;
+    return *this;
+}
+
+RenderGraph::BufferBuilder& RenderGraph::BufferBuilder::AsVertexBuffer()
+{
+    mNode.mDesc.descriptors |= GPU_RESOURCE_TYPE_VERTEX_BUFFER;
+    mNode.mDesc.start_state = GPU_RESOURCE_STATE_COPY_DEST;
+    return *this;
+}
+
+RenderGraph::BufferBuilder& RenderGraph::BufferBuilder::AsIndexBuffer()
+{
+    mNode.mDesc.descriptors |= GPU_RESOURCE_TYPE_INDEX_BUFFER;
+    mNode.mDesc.start_state = GPU_RESOURCE_STATE_COPY_DEST;
+    return *this;
+}
+
+RenderGraph::BufferBuilder& RenderGraph::BufferBuilder::AsUniformBuffer()
+{
+    mNode.mDesc.descriptors |= GPU_RESOURCE_TYPE_UNIFORM_BUFFER;
+    mNode.mDesc.start_state = GPU_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+    return *this;
+}
+
+RenderGraph::BufferBuilder& RenderGraph::BufferBuilder::PreferOnDevice()
+{
+    mNode.mDesc.prefer_on_device = true;
+    return *this;
+}
+
+RenderGraph::BufferBuilder& RenderGraph::BufferBuilder::PreferOnHost()
+{
+    mNode.mDesc.prefer_on_host = true;
+    return *this;
+}
+
 BufferHandle RenderGraph::CreateBuffer(const BufferSetupFunc& setup)
 {
     auto node = m_pNAEFactory->Allocate<BufferNode>();
@@ -339,12 +439,12 @@ if (mPasses[0] == pending_pass) return buffer->mInitState;
     EGPUResourceState result = buffer->mInitState;
 
     //each write pass
-    ForeachWriterPass(texture->GetHandle(),
-    [&](TextureNode* tex, PassNode* pass, RenderGraphEdge* edge)
+    ForeachWriterPass(buffer->GetHandle(),
+    [&](BufferNode* buffer, PassNode* pass, RenderGraphEdge* edge)
     {
-        if (edge->type == ERelationshipType::TextureWrite)
+        if (edge->type == ERelationshipType::BufferReadWrite)
         {
-            auto writeEdge = static_cast<TextureWriteEdge*>(edge);
+            auto writeEdge = static_cast<BufferReadWriteEdge*>(edge);
             if (pass->After(pass_iter) && pass->Before(pending_pass))
             {
                 pass_iter = pass;
@@ -354,22 +454,158 @@ if (mPasses[0] == pending_pass) return buffer->mInitState;
     });
 
     //each read pass
-    ForeachReaderPass(texture->GetHandle(), [&](TextureNode* tex, PassNode* pass, RenderGraphEdge* edge)
+    ForeachReaderPass(buffer->GetHandle(), [&](BufferNode* tex, PassNode* pass, RenderGraphEdge* edge)
     {
-        if (edge->type == ERelationshipType::TextureRead)
+        if (edge->type == ERelationshipType::BufferRead)
         {
-            auto readEdge = static_cast<TextureReadEdge*>(edge);
+            auto readEdge = static_cast<BufferReadEdge*>(edge);
             if (pass->After(pass_iter) && pass->Before(pending_pass))
             {
                 pass_iter = pass;
                 result    = readEdge->mRequestedState;
             }
         }
+        else if (edge->type == ERelationshipType::PipelineBuffer)
+        {
+            //PipelineBuffer edge
+            /* auto readEdge = static_cast<BufferReadEdge*>(edge);
+            if (pass->After(pass_iter) && pass->Before(pending_pass))
+            {
+                pass_iter = pass;
+                result    = readEdge->mRequestedState;
+            } */
+        }
     });
 
     return result;
 }
+
+uint32_t RenderGraph::ForeachWriterPass(const BufferHandle handle, const std::function<void(BufferNode*, PassNode*, RenderGraphEdge*)>& func)
+{
+    return m_pGraph->ForeachIncomingEdges(handle, [&](DependencyGraphNode* from, DependencyGraphNode* to, DependencyGraphEdge* edge)
+    {
+        PassNode* node = static_cast<PassNode*>(from);
+        BufferNode* buffer = static_cast<BufferNode*>(to);
+        RenderGraphEdge* e = static_cast<RenderGraphEdge*>(edge);
+        func(buffer, node, e);
+    });
+}
+
+uint32_t RenderGraph::ForeachReaderPass(const BufferHandle handle, const std::function<void(BufferNode*, PassNode*, RenderGraphEdge*)>& func)
+{
+    return m_pGraph->ForeachOutgoingEdges(handle, [&](DependencyGraphNode* from, DependencyGraphNode* to, DependencyGraphEdge* edge)
+    {
+        PassNode* node = static_cast<PassNode*>(to);
+        BufferNode* buffer = static_cast<BufferNode*>(from);
+        RenderGraphEdge* e = static_cast<RenderGraphEdge*>(edge);
+        func(buffer, node, e);
+    });
+}
 ///////////BufferBuilder//////////////////
+
+///////////CopyPassBuilder//////////////////
+RenderGraph::CopyPassBuilder::CopyPassBuilder(RenderGraph& graph, CopyPassNode& node)
+: mGraph(graph), mPassNode(node)
+{
+
+}
+
+RenderGraph::CopyPassBuilder& RenderGraph::CopyPassBuilder::SetName(const char* name)
+{
+    mPassNode.SetName(name);
+    return *this;
+}
+
+RenderGraph::CopyPassBuilder& RenderGraph::CopyPassBuilder::CanBeLone()
+{
+    mPassNode.mCanBeLone = true;
+    return *this;
+}
+
+RenderGraph::CopyPassBuilder& RenderGraph::CopyPassBuilder::TextureToTexture(TextureSubresourceHandle src, TextureSubresourceHandle dst, EGPUResourceState dstState)
+{
+    auto in        = mGraph.m_pNAEFactory->Allocate<TextureReadEdge>("copy_src", src.mThis, GPU_RESOURCE_STATE_COPY_SOURCE);
+    auto out       = mGraph.m_pNAEFactory->Allocate<TextureWriteEdge>(0, dst.mThis, GPU_RESOURCE_STATE_COPY_DEST);
+    auto&& inEdge  = mPassNode.mInTextureEdges.emplace_back(in);
+    auto&& outEdge = mPassNode.mOutTextureEdges.emplace_back(out);
+    mGraph.m_pGraph->Link(mGraph.m_pGraph->AccessNode(src.mThis), &mPassNode, inEdge);
+    mGraph.m_pGraph->Link(&mPassNode, mGraph.m_pGraph->AccessNode(dst.mThis), outEdge);
+    mPassNode.mT2Ts.emplace_back(src, dst);
+    if (dstState != GPU_RESOURCE_STATE_COPY_DEST)
+    {
+        mPassNode.mTextureBarriers.emplace_back(dst, dstState);
+    }
+    return *this;
+}
+
+RenderGraph::CopyPassBuilder& RenderGraph::CopyPassBuilder::BufferToBuffer(BufferRangeHandle src, BufferRangeHandle dst, EGPUResourceState dstState)
+{
+    auto in        = mGraph.m_pNAEFactory->Allocate<BufferReadEdge>("copy_src", src, GPU_RESOURCE_STATE_COPY_SOURCE);
+    auto out       = mGraph.m_pNAEFactory->Allocate<BufferReadWriteEdge>(dst, GPU_RESOURCE_STATE_COPY_DEST);
+    auto&& inEdge  = mPassNode.mInBufferEdges.emplace_back(in);
+    auto&& outEdge = mPassNode.mOutBufferEdges.emplace_back(out);
+    mGraph.m_pGraph->Link(mGraph.m_pGraph->AccessNode(src.mThis), &mPassNode, inEdge);
+    mGraph.m_pGraph->Link(&mPassNode, mGraph.m_pGraph->AccessNode(dst.mThis), outEdge);
+    mPassNode.mB2Bs.emplace_back(src, dst);
+    if (dstState != GPU_RESOURCE_STATE_COPY_DEST)
+    {
+        mPassNode.mBufferBarriers.emplace_back(dst, dstState);
+    }
+    return *this;
+}
+
+RenderGraph::CopyPassBuilder& RenderGraph::CopyPassBuilder::BufferToTexture(BufferRangeHandle src, TextureSubresourceHandle dst, EGPUResourceState dstState)
+{
+    auto in        = mGraph.m_pNAEFactory->Allocate<BufferReadEdge>("copy_src", src, GPU_RESOURCE_STATE_COPY_SOURCE);
+    auto out       = mGraph.m_pNAEFactory->Allocate<TextureWriteEdge>(0, dst.mThis, GPU_RESOURCE_STATE_COPY_DEST);
+    auto&& inEdge  = mPassNode.mInBufferEdges.emplace_back(in);
+    auto&& outEdge = mPassNode.mOutTextureEdges.emplace_back(out);
+    mGraph.m_pGraph->Link(mGraph.m_pGraph->AccessNode(src.mThis), &mPassNode, inEdge);
+    mGraph.m_pGraph->Link(&mPassNode, mGraph.m_pGraph->AccessNode(dst.mThis), outEdge);
+    mPassNode.mB2Ts.emplace_back(src, dst);
+    if (dstState != GPU_RESOURCE_STATE_COPY_DEST)
+    {
+        mPassNode.mTextureBarriers.emplace_back(dst, dstState);
+    }
+    return *this;
+}
+
+RenderGraph::CopyPassBuilder& RenderGraph::CopyPassBuilder::FromBuffer(BufferRangeHandle src)
+{
+    auto in = mGraph.m_pNAEFactory->Allocate<BufferReadEdge>("copy_src", src, GPU_RESOURCE_STATE_COPY_SOURCE);
+    mPassNode.mInBufferEdges.emplace_back(in);
+    mGraph.m_pGraph->Link(mGraph.m_pGraph->AccessNode(src.mThis), &mPassNode, in);
+    return *this;
+}
+
+PassHandle RenderGraph::AddCopyPass(const CopyPassSetupFunc& setup, const CopyPassExecuteFunction& execute)
+{
+    uint32_t order = (uint32_t)mPasses.size();
+    auto newPass = m_pNAEFactory->Allocate<CopyPassNode>(order);
+    newPass->mExecuteFunc = execute;
+    mPasses.emplace_back(newPass);
+    m_pGraph->Insert(newPass);
+
+    CopyPassBuilder builder(*this, *newPass);
+    setup(*this, builder);
+    return newPass->GetHandle();
+}
+///////////CopyPassBuilder//////////////////
+
+BufferNode* RenderGraph::Resolve(BufferHandle hdl)
+{
+    return static_cast<BufferNode*>(m_pGraph->NodeAt(hdl));
+}
+
+TextureNode* RenderGraph::Resolve(TextureHandle hdl)
+{
+    return static_cast<TextureNode*>(m_pGraph->NodeAt(hdl));
+}
+
+PassNode* RenderGraph::Resolve(PassHandle hdl)
+{
+    return static_cast<PassNode*>(m_pGraph->NodeAt(hdl));
+}
 
 RenderGraph::RenderGraph()
 {

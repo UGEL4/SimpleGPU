@@ -27,7 +27,7 @@ TextureNode* TextureWriteEdge::GetTextureNode()
 }
 ///////////TextureWriteEdge////////////////
 
-///////////TextureWriteEdge////////////////
+///////////TextureReadEdge////////////////
 TextureReadEdge::TextureReadEdge(const std::string_view& name, TextureSRVHandle handle, EGPUResourceState requestedState)
 : TextureEdge(ERelationshipType::TextureRead, requestedState)
 , mNameHash(GPUNameHash(name.data()))
@@ -45,7 +45,7 @@ TextureNode* TextureReadEdge::GetTextureNode()
 {
     return (TextureNode*)From();
 }
-///////////TextureWriteEdge////////////////
+///////////TextureReadEdge////////////////
 ///////////BufferEdge////////////////
 BufferEdge::BufferEdge(ERelationshipType type, EGPUResourceState requestedState)
 : RenderGraphEdge(type), mRequestedState(requestedState)
@@ -53,8 +53,8 @@ BufferEdge::BufferEdge(ERelationshipType type, EGPUResourceState requestedState)
 
 }
 
-BufferReadEdge::BufferReadEdge(const std::string_view& name, BufferCBVHandle handle, EGPUResourceState requestedState)
-: BufferEdge(ERelationshipType::BufferRead, requestedState), mHandle(handle)
+BufferReadEdge::BufferReadEdge(const std::string_view& name, BufferRangeHandle handle, EGPUResourceState requestedState)
+: BufferEdge(ERelationshipType::BufferRead, requestedState), mNameHash(GPUNameHash(name.data())), mName(name), mHandle(handle)
 {
 
 }
@@ -69,7 +69,7 @@ BufferNode* BufferReadEdge::GetBufferNode()
 }
 ///////////BufferEdge////////////////
 ///////////BufferReadWriteEdge////////////////
-BufferReadWriteEdge::BufferReadWriteEdge(const std::string_view& name, BufferUAVHandle handle, EGPUResourceState requestedState)
+BufferReadWriteEdge::BufferReadWriteEdge(BufferRangeHandle handle, EGPUResourceState requestedState)
 : BufferEdge(ERelationshipType::BufferReadWrite, requestedState), mHandle(handle)
 {
 

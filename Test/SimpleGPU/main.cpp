@@ -618,8 +618,8 @@ void RenderGraphSimple()
     //render resources
     GPUSamplerID texture_sampler              = CreateTextureSampler(device);
     GPUTextureID texture                      = CreateTexture(device, pGraphicQueue);
-    GPUTextureViewID textureView              = CreateTextureView(texture);
     const char8_t* sampler_name               = u8"texSamp";
+    /*GPUTextureViewID textureView              = CreateTextureView(texture);
     GPUCommandPoolID copy_pool = GPUCreateCommandPool(pGraphicQueue);
     GPUCommandBufferDescriptor copy_cmd_desc{};
     copy_cmd_desc.isSecondary = false;
@@ -657,7 +657,7 @@ void RenderGraphSimple()
     GPUQueueSubmitDescriptor texture_cpy_submit = { .cmds = &copy_cmd, .cmds_count = 1 };
     GPUSubmitQueue(pGraphicQueue, &texture_cpy_submit);
     GPUWaitQueueIdle(pGraphicQueue);
-    GPUFreeBuffer(uploadBuffer);
+    GPUFreeBuffer(uploadBuffer);*/
     // end upload resources
 
     // start create renderpipeline
@@ -750,10 +750,31 @@ void RenderGraphSimple()
                 .AllowRenderTarget();
             });
 
+            auto uploadBufferHandle = pGraph->CreateBuffer([=](RenderGraph& g, BufferBuilder& builder)
+            {
+                builder.SetName("texture")
+                .Size(sizeof(TEXTURE_DATA))
+                .AsUploadBuffer();
+            });
+
             auto colorSampleTexHandle = pGraph->CreateTexture([=](RenderGraph& g, TextureBuilder& builder)
             {
                 builder.SetName("colorSampleTex")
                 .Import(texture, GPU_RESOURCE_STATE_SHADER_RESOURCE);
+            });
+
+            
+
+            pGraph->AddCopyPass([=](RenderGraph& g, CopyPassBuilder& builder)
+            {
+                builder.SetName("copy_texture")
+                .CanBeLone()
+                .BufferToTexture(uploadBufferHandle.BufferRange(0, 0), colorSampleTexHandle, GPU_RESOURCE_STATE_SHADER_RESOURCE);
+            },
+            [=](RenderGraph& graph, CopyPassContext& context)
+            {
+                auto uploadBuffer = context.Resolve(uploadBufferHandle);
+                memcpy(uploadBuffer->cpu_mapped_address, TEXTURE_DATA, sizeof(TEXTURE_DATA));
             });
 
             pGraph->AddRenderPass(

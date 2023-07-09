@@ -71,7 +71,7 @@ uint64_t RenderGraphBackend::Execute()
 {
     std::cout << "RenderGraphBackend::Execute" << std::endl;
 
-    uint32_t frameIndex = mFrameIndex % RG_MAX_FRAME_IN_FILGHT;
+    uint32_t frameIndex = mFrameIndex % RG_MAX_FRAME_IN_FLIGHT;
     auto& executor = mExecutors[frameIndex];
     GPUWaitFences(&executor.m_pFence, 1);
 
@@ -87,6 +87,10 @@ uint64_t RenderGraphBackend::Execute()
             if (pass->mPassType == EPassType::Present)
             {
                 ExectuePresentPass(static_cast<PresentPassNode*>(pass), executor);
+            }
+            if (pass->mPassType == EPassType::Copy)
+            {
+                ExectueCopyPass(static_cast<CopyPassNode*>(pass), executor);
             }
         }
     }
@@ -115,9 +119,16 @@ uint64_t RenderGraphBackend::Execute()
         {
             if (pass)
             {
+                //texture
                 pass->ForEachTextures([this](TextureNode* texture, TextureEdge* edge)
                 {
                     m_pNAEFactory->Dealloc(edge);
+                });
+
+                //buffer
+                pass->ForeachBuffer([this](BufferNode* buffer, BufferEdge* dege)
+                {
+                    m_pNAEFactory->Dealloc(dege);
                 });
                 m_pNAEFactory->Dealloc(pass);
             }
@@ -143,7 +154,7 @@ uint64_t RenderGraphBackend::Execute()
 void RenderGraphBackend::Initialize()
 {
     RenderGraph::Initialize();
-    for (uint32_t i = 0; i < RG_MAX_FRAME_IN_FILGHT; i++)
+    for (uint32_t i = 0; i < RG_MAX_FRAME_IN_FLIGHT; i++)
     {
         mExecutors[i].Initialize(m_pDevice, m_pQueue);
     }
@@ -155,7 +166,7 @@ void RenderGraphBackend::Initialize()
 void RenderGraphBackend::Finalize()
 {
     RenderGraph::Finalize();
-    for (uint32_t i = 0; i < RG_MAX_FRAME_IN_FILGHT; i++)
+    for (uint32_t i = 0; i < RG_MAX_FRAME_IN_FLIGHT; i++)
     {
         mExecutors[i].Finalize();
     }
@@ -169,13 +180,17 @@ void RenderGraphBackend::ExecuteRenderPass(RenderPassNode* pass,  RenderGraphFra
     // resource de-virtualize
     std::vector<GPUTextureBarrier> tex_barriers;
     std::vector<std::pair<TextureHandle, GPUTextureID>> resolved_textures;
-    CalculateResourceBarriers(executor, pass, tex_barriers, resolved_textures);
+    std::vector<GPUBufferBarrier> buffer_barriers;
+    std::vector<std::pair<BufferHandle, GPUBufferID>> resolved_buffers;
+    CalculateResourceBarriers(executor, pass, tex_barriers, resolved_textures, buffer_barriers, resolved_buffers);
     //alloca & update descriptorset
     RenderPassContext passContext {};
-    passContext.m_pPassNode = pass;
-    passContext.m_pCmd      = executor.m_pCmd;
-    passContext.m_pGraph    = this;
-    passContext.m_pBindTable = AllocateAndUpdatePassBindTable(executor, pass, pass->m_pRootSignature);
+    passContext.m_pPassNode       = pass;
+    passContext.m_pCmd            = executor.m_pCmd;
+    passContext.m_pGraph          = this;
+    passContext.mResolvedBuffers  = resolved_buffers;
+    passContext.mResolvedTextures = resolved_textures;
+    passContext.m_pBindTable      = AllocateAndUpdatePassBindTable(executor, pass, pass->m_pRootSignature);
     //call gpu aip
     GPUResourceBarrierDescriptor barrier_desc{};
     if (!tex_barriers.empty())
@@ -270,11 +285,117 @@ void RenderGraphBackend::ExectuePresentPass(PresentPassNode* pass, RenderGraphFr
     GPUCmdResourceBarrier(executor.m_pCmd, &barrier_desc);
 }
 
+void RenderGraphBackend::ExectueCopyPass(CopyPassNode* pass, RenderGraphFrameExecutor& executor)
+{
+    std::vector<GPUTextureBarrier> tex_barriers;
+    std::vector<std::pair<TextureHandle, GPUTextureID>> resolved_textures;
+    std::vector<GPUBufferBarrier> buffer_barriers;
+    std::vector<std::pair<BufferHandle, GPUBufferID>> resolved_buffers;
+    CalculateResourceBarriers(executor, pass, tex_barriers, resolved_textures, buffer_barriers, resolved_buffers);
+    // late barriers
+    std::vector<GPUTextureBarrier> late_tex_barriers = {};
+    std::vector<GPUBufferBarrier> late_buf_barriers = {};
+    // call cgpu apis
+    GPUResourceBarrierDescriptor barriers = {};
+    GPUResourceBarrierDescriptor late_barriers = {};
+    if (!tex_barriers.empty())
+    {
+        barriers.texture_barriers = tex_barriers.data();
+        barriers.texture_barriers_count = (uint32_t)tex_barriers.size();
+    }
+    if (!buffer_barriers.empty())
+    {
+        barriers.buffer_barriers = buffer_barriers.data();
+        barriers.buffer_barriers_count = (uint32_t)buffer_barriers.size();
+    }
+    {
+        CopyPassContext passContext   = {};
+        passContext.m_pCmd            = executor.m_pCmd;
+        passContext.mResolvedBuffers  = resolved_buffers;
+        passContext.mResolvedTextures = resolved_textures;
+        pass->mExecuteFunc(*this, passContext);
+        for (auto [buffer_handle, state] : pass->mBufferBarriers)
+        {
+            auto buffer       = passContext.Resolve(buffer_handle);
+            auto& barrier     = late_buf_barriers.emplace_back();
+            barrier.buffer    = buffer;
+            barrier.src_state = GPU_RESOURCE_STATE_COPY_DEST;
+            barrier.dst_state = state;
+        }
+        for (auto [texture_handle, state] : pass->mTextureBarriers)
+        {
+            auto texture      = passContext.Resolve(texture_handle);
+            auto& barrier     = late_tex_barriers.emplace_back();
+            barrier.texture   = texture;
+            barrier.src_state = GPU_RESOURCE_STATE_COPY_DEST;
+            barrier.dst_state = state;
+        }
+        if (!late_tex_barriers.empty())
+        {
+            late_barriers.texture_barriers       = late_tex_barriers.data();
+            late_barriers.texture_barriers_count = (uint32_t)late_tex_barriers.size();
+        }
+        if (!late_buf_barriers.empty())
+        {
+            late_barriers.buffer_barriers       = late_buf_barriers.data();
+            late_barriers.buffer_barriers_count = (uint32_t)late_buf_barriers.size();
+        }
+    }
+    GPUCmdResourceBarrier(executor.m_pCmd, &barriers);
+    for (uint32_t i = 0; i < pass->mT2Ts.size(); i++)
+    {
+        auto src_node = RenderGraph::Resolve(pass->mT2Ts[i].first);
+        auto dst_node = RenderGraph::Resolve(pass->mT2Ts[i].second);
+        /* GPUTextureToTextureTransfer t2t = {};
+        t2t.src = resolve(executor, *src_node);
+        t2t.src_subresource.aspects = pass->t2ts[i].first.aspects;
+        t2t.src_subresource.mip_level = pass->t2ts[i].first.mip_level;
+        t2t.src_subresource.base_array_layer = pass->t2ts[i].first.array_base;
+        t2t.src_subresource.layer_count = pass->t2ts[i].first.array_count;
+        t2t.dst = resolve(executor, *dst_node);
+        t2t.dst_subresource.aspects = pass->t2ts[i].second.aspects;
+        t2t.dst_subresource.mip_level = pass->t2ts[i].second.mip_level;
+        t2t.dst_subresource.base_array_layer = pass->t2ts[i].second.array_base;
+        t2t.dst_subresource.layer_count = pass->t2ts[i].second.array_count;
+        cgpu_cmd_transfer_texture_to_texture(executor.gfx_cmd_buf, &t2t); */
+    }
+    for (uint32_t i = 0; i < pass->mB2Bs.size(); i++)
+    {
+        auto src_node = RenderGraph::Resolve(pass->mB2Bs[i].first);
+        auto dst_node = RenderGraph::Resolve(pass->mB2Bs[i].second);
+        GPUBufferToBufferTransfer b2b = {};
+        /* b2b.src = Resolve(executor, *src_node);
+        b2b.src_offset = pass->mB2Bs[i].first.mFrom;
+        b2b.dst = Resolve(executor, *dst_node);
+        b2b.dst_offset = pass->mB2Bs[i].second.mFrom;
+        b2b.size = pass->mB2Bs[i].first.mTo - b2b.src_offset;
+        GPUCmdTransferBufferToBuffer(executor.m_pCmd, &b2b); */
+    }
+    for (uint32_t i = 0; i < pass->mB2Ts.size(); i++)
+    {
+        auto src_node                        = RenderGraph::Resolve(pass->mB2Ts[i].first);
+        auto dst_node                        = RenderGraph::Resolve(pass->mB2Ts[i].second);
+        GPUBufferToTextureTransfer b2t       = {};
+        b2t.src                              = Resolve(executor, *src_node);
+        b2t.src_offset                       = pass->mB2Ts[i].first.mFrom;
+        b2t.dst                              = Resolve(executor, *dst_node);
+        b2t.dst_subresource.mip_level        = pass->mB2Ts[i].second.mip_level;
+        b2t.dst_subresource.base_array_layer = pass->mB2Ts[i].second.array_base;
+        b2t.dst_subresource.layer_count      = pass->mB2Ts[i].second.array_count;
+        GPUCmdTransferBufferToTexture(executor.m_pCmd, &b2t);
+    }
+    GPUCmdResourceBarrier(executor.m_pCmd, &late_barriers);
+    DeallocaResources(pass);
+}
+
 void RenderGraphBackend::CalculateResourceBarriers(RenderGraphFrameExecutor& executor, PassNode* pass,
-        std::vector<GPUTextureBarrier>& tex_barriers, std::vector<std::pair<TextureHandle, GPUTextureID>>& resolved_textures)
+        std::vector<GPUTextureBarrier>& tex_barriers, std::vector<std::pair<TextureHandle, GPUTextureID>>& resolved_textures,
+        std::vector<GPUBufferBarrier>& buffer_barriers, std::vector<std::pair<BufferHandle, GPUBufferID>>& resolved_buffers)
 {
     tex_barriers.reserve(pass->GetTextureCount());
     resolved_textures.reserve(pass->GetTextureCount());
+    buffer_barriers.reserve(pass->GetBuffersCount());
+    resolved_buffers.reserve(pass->GetBuffersCount());
     //遍历pass的每一个texture资源
     pass->ForEachTextures([&](TextureNode* tex, TextureEdge* edge)
     {
@@ -292,6 +413,19 @@ void RenderGraphBackend::CalculateResourceBarriers(RenderGraphFrameExecutor& exe
     });
 
     //遍历pass的每一个buffer资源
+    pass->ForeachBuffer([&](BufferNode* bufferNode, BufferEdge* bufferEdge)
+    {
+        auto resolved_buffer = Resolve(executor, *bufferNode);
+        resolved_buffers.emplace_back(bufferNode->GetHandle(), resolved_buffer);
+        auto curr_state = GetLastestState(bufferNode, pass);
+        if (curr_state == bufferEdge->mRequestedState) return;
+        //分配barrier
+        GPUBufferBarrier barrier{};
+        barrier.buffer = resolved_buffer;
+        barrier.src_state = curr_state;
+        barrier.dst_state = bufferEdge->mRequestedState;
+        buffer_barriers.emplace_back(barrier);
+    });
 }
 
 GPUTextureID RenderGraphBackend::Resolve(RenderGraphFrameExecutor& executor, const TextureNode& texture)
@@ -304,6 +438,19 @@ GPUTextureID RenderGraphBackend::Resolve(RenderGraphFrameExecutor& executor, con
         texture.mInitState      = allocated.second;
     }
     return texture.m_pFrameTexture;
+}
+
+GPUBufferID RenderGraphBackend::Resolve(RenderGraphFrameExecutor& executor, const BufferNode& buffer)
+{
+    if (!buffer.m_pBuffer)
+    {
+        //uint64_t latest_frame   = (node.tags & kRenderGraphDynamicResourceTag) ? get_latest_finished_frame() : UINT64_MAX
+        uint64_t latest_frame = UINT64_MAX;
+        auto allocated        = mBufferPool.Allocate(buffer.mDesc, { mFrameIndex, 0 }, latest_frame);
+        buffer.m_pBuffer      = allocated.first;
+        buffer.mInitState     = allocated.second;
+    }
+    return buffer.m_pBuffer;
 }
 
 GPUBindTableID RenderGraphBackend::AllocateAndUpdatePassBindTable(RenderGraphFrameExecutor& executor, PassNode* pass, GPURootSignatureID root_sig)
@@ -403,5 +550,38 @@ void RenderGraphBackend::DeallocaResources(PassNode* pass)
     });
 
     // for each buffer
+    pass->ForeachBuffer([this, pass](BufferNode* bufferNode, BufferEdge* buffreEdge)
+    {
+        if (bufferNode->mImported) return;
+        bool isLastUser = true;
+        bufferNode->ForeachNeighbors([&](DependencyGraphNode* node)
+        {
+            RenderGraphNode* renderNode = (RenderGraphNode*)node;
+            if (renderNode->type == EObjectType::Pass)
+            {
+                isLastUser = isLastUser && pass->mOrder >= ((PassNode*)renderNode)->mOrder;
+            }
+        });
+        if (isLastUser)
+        {
+            mBufferPool.Deallocate(bufferNode->mDesc, bufferNode->m_pBuffer, buffreEdge->mRequestedState, {mFrameIndex, 0});
+        }
+    });
+}
+
+uint64_t RenderGraphBackend::GetLatestFinishedFrame()
+{
+    if (mFrameIndex < RG_MAX_FRAME_IN_FLIGHT) return 0;
+
+    uint64_t result = mFrameIndex - RG_MAX_FRAME_IN_FLIGHT;
+    for (auto&& executor : mExecutors)
+    {
+        if (!executor.m_pFence) continue;
+        if (GPUQueryFenceStatus(executor.m_pFence) == GPU_FENCE_STATUS_COMPLETE)
+        {
+            result = std::max(result, executor.mExecFrame);
+        }
+    }
+    return result;
 }
 //////////////////RenderGraphBackend////////////////////////

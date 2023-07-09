@@ -39,7 +39,7 @@ namespace RG
         std::memset(&stroage, 0, sizeof(stroage));
         BufferPool::Key key = *(new (&stroage) BufferPool::Key(m_pDevice, desc));
         auto& pool = mBufferPools[key];
-        uint64_t index = -1;
+        int64_t index = -1;
         for (uint64_t i = 0; i < pool.size(); i++)
         {
             if (pool[i].mMark.frame_index < min_frame_index && pool[i].m_pBuffer->size >= desc.size)
