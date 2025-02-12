@@ -33,11 +33,12 @@ inline static void ReadShaderBytes(const char8_t* virtual_path, uint32_t** bytes
     switch (backend)
     {
         case EGPUBackend::GPUBackend_Vulkan:
-            strcat((char*)shader_file, (const char*)(u8".spv"));
-            break;
+        strcat((char*)shader_file, (const char*)(u8".spv"));
+        break;
         default:
-            break;
+        break;
     }
+    printf("path: %s\n", shader_file);
     ReadBytes(shader_file, bytes, length);
 }
 
@@ -760,7 +761,7 @@ void RenderGraphSimple()
             auto colorSampleTexHandle = pGraph->CreateTexture([=](RenderGraph& g, TextureBuilder& builder)
             {
                 builder.SetName("colorSampleTex")
-                .Import(texture, GPU_RESOURCE_STATE_SHADER_RESOURCE);
+                .Import(texture, GPU_RESOURCE_STATE_UNDEFINED);
             });
 
             
@@ -769,7 +770,7 @@ void RenderGraphSimple()
             {
                 builder.SetName("copy_texture")
                 .CanBeLone()
-                .BufferToTexture(uploadBufferHandle.BufferRange(0, 0), colorSampleTexHandle, GPU_RESOURCE_STATE_SHADER_RESOURCE);
+                .BufferToTexture(uploadBufferHandle.BufferRange(0, 0), colorSampleTexHandle);
             },
             [=](RenderGraph& graph, CopyPassContext& context)
             {
